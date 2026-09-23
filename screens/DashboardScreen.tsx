@@ -4,34 +4,25 @@ import {
   Text,
   TextInput,
   TouchableOpacity,
-  FlatList,
   StyleSheet,
   Platform,
+  KeyboardAvoidingView,
+  ScrollView,
 } from 'react-native';
 import { Picker } from '@react-native-picker/picker';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { useAuth } from '../context/AuthContext';
-
-type Expense = {
-  id: string;
-  description: string;
-  amount: number;
-  category: string;
-  date: string;
-};
+import { useExpenses, Expense } from '../context/ExpenseContext';
 
 export default function DashboardScreen() {
   const { logout } = useAuth();
+  const { addExpense } = useExpenses();
 
   const [description, setDescription] = useState('');
   const [amount, setAmount] = useState('');
   const [category, setCategory] = useState('');
   const [date, setDate] = useState(new Date());
   const [showDatePicker, setShowDatePicker] = useState(false);
-
-  const [expenses, setExpenses] = useState<Expense[]>([]);
-  const [filterCategory, setFilterCategory] = useState('');
-  const [filterDate, setFilterDate] = useState('');
 
   const handleAddExpense = () => {
     if (!description || !amount || !category) return;
@@ -44,7 +35,7 @@ export default function DashboardScreen() {
       date: date.toISOString(),
     };
 
-    setExpenses((prev) => [newExpense, ...prev]);
+    addExpense(newExpense);
 
     setDescription('');
     setAmount('');
@@ -52,16 +43,11 @@ export default function DashboardScreen() {
     setDate(new Date());
   };
 
-  const filteredExpenses = expenses.filter((exp) => {
-    const matchCategory = filterCategory ? exp.category === filterCategory : true;
-    const matchDate = filterDate
-      ? exp.date.slice(0, 10) === filterDate
-      : true;
-    return matchCategory && matchDate;
-  });
-
   return (
-    <View style={styles.container}>
+    <KeyboardAvoidingView 
+      style={styles.container}
+      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+    >
       <View style={styles.header}>
         <Text style={styles.title}>Expense Tracker</Text>
         <TouchableOpacity onPress={logout} style={styles.logoutButton}>
@@ -69,103 +55,65 @@ export default function DashboardScreen() {
         </TouchableOpacity>
       </View>
 
-      <FlatList
-        data={filteredExpenses}
-        keyExtractor={(item) => item.id}
-        ListHeaderComponent={
-          <>
-            {/* Expense Form Card */}
-            <View style={styles.card}>
-              <Text style={styles.sectionTitle}>Add New Expense</Text>
-              <TextInput
-                placeholder="Description"
-                placeholderTextColor="#94A3B8"
-                style={styles.input}
-                value={description}
-                onChangeText={setDescription}
-              />
-              <TextInput
-                placeholder="Amount (KES)"
-                placeholderTextColor="#94A3B8"
-                keyboardType="numeric"
-                style={styles.input}
-                value={amount}
-                onChangeText={setAmount}
-              />
-              <View style={styles.pickerContainer}>
-                <Picker
-                  selectedValue={category}
-                  onValueChange={(itemValue) => setCategory(itemValue)}
-                  style={styles.picker}
-                >
-                  <Picker.Item label="Select Category" value="" color="#64748B" />
-                  <Picker.Item label="Food" value="Food" />
-                  <Picker.Item label="Transport" value="Transport" />
-                  <Picker.Item label="Utilities" value="Utilities" />
-                  <Picker.Item label="Entertainment" value="Entertainment" />
-                  <Picker.Item label="Others" value="Others" />
-                </Picker>
-              </View>
-
-              <TouchableOpacity
-                onPress={() => setShowDatePicker(true)}
-                style={[styles.input, styles.dateButton]}
-              >
-                <Text style={{ color: '#0F172A' }}>{date.toDateString()}</Text>
-              </TouchableOpacity>
-
-              {showDatePicker && (
-                <DateTimePicker
-                  value={date}
-                  mode="date"
-                  display="default"
-                  onChange={(event, selectedDate) => {
-                    setShowDatePicker(false);
-                    if (selectedDate) setDate(selectedDate);
-                  }}
-                />
-              )}
-
-              <TouchableOpacity onPress={handleAddExpense} style={styles.primaryButton}>
-                <Text style={styles.primaryButtonText}>Add Expense</Text>
-              </TouchableOpacity>
-            </View>
-
-            {/* Filters Section */}
-            <View style={styles.filterSection}>
-              <Text style={styles.sectionTitle}>Recent Expenses</Text>
-              <View style={styles.pickerContainer}>
-                <Picker
-                  selectedValue={filterCategory}
-                  onValueChange={(value) => setFilterCategory(value)}
-                  style={styles.picker}
-                >
-                  <Picker.Item label="All Categories" value="" />
-                  <Picker.Item label="Food" value="Food" />
-                  <Picker.Item label="Transport" value="Transport" />
-                  <Picker.Item label="Utilities" value="Utilities" />
-                  <Picker.Item label="Entertainment" value="Entertainment" />
-                  <Picker.Item label="Others" value="Others" />
-                </Picker>
-              </View>
-            </View>
-          </>
-        }
-        renderItem={({ item }) => (
-          <View style={styles.expenseItem}>
-            <View style={styles.expenseLeft}>
-              <Text style={styles.expenseText}>{item.description}</Text>
-              <Text style={styles.expenseDate}>
-                {item.category} • {new Date(item.date).toDateString()}
-              </Text>
-            </View>
-            <Text style={styles.expenseAmount}>KES {item.amount.toFixed(2)}</Text>
+      <ScrollView contentContainerStyle={styles.content}>
+        {/* Expense Form Card */}
+        <View style={styles.card}>
+          <Text style={styles.sectionTitle}>Add New Expense</Text>
+          <TextInput
+            placeholder="Description"
+            placeholderTextColor="#94A3B8"
+            style={styles.input}
+            value={description}
+            onChangeText={setDescription}
+          />
+          <TextInput
+            placeholder="Amount (KES)"
+            placeholderTextColor="#94A3B8"
+            keyboardType="numeric"
+            style={styles.input}
+            value={amount}
+            onChangeText={setAmount}
+          />
+          <View style={styles.pickerContainer}>
+            <Picker
+              selectedValue={category}
+              onValueChange={(itemValue) => setCategory(itemValue)}
+              style={styles.picker}
+            >
+              <Picker.Item label="Select Category" value="" color="#64748B" />
+              <Picker.Item label="Food" value="Food" />
+              <Picker.Item label="Transport" value="Transport" />
+              <Picker.Item label="Utilities" value="Utilities" />
+              <Picker.Item label="Entertainment" value="Entertainment" />
+              <Picker.Item label="Others" value="Others" />
+            </Picker>
           </View>
-        )}
-        contentContainerStyle={styles.expenseListContent}
-        showsVerticalScrollIndicator={false}
-      />
-    </View>
+
+          <TouchableOpacity
+            onPress={() => setShowDatePicker(true)}
+            style={[styles.input, styles.dateButton]}
+          >
+            <Text style={{ color: '#0F172A' }}>{date.toDateString()}</Text>
+          </TouchableOpacity>
+
+          {showDatePicker && (
+            <DateTimePicker
+              value={date}
+              mode="date"
+              display="default"
+              onChange={(event, selectedDate) => {
+                setShowDatePicker(false);
+                if (selectedDate) setDate(selectedDate);
+              }}
+            />
+          )}
+
+          <TouchableOpacity onPress={handleAddExpense} style={styles.primaryButton}>
+            <Text style={styles.primaryButtonText}>Add Expense</Text>
+          </TouchableOpacity>
+        </View>
+      </ScrollView>
+    </KeyboardAvoidingView>
   );
 }
 
@@ -201,15 +149,13 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     fontSize: 14,
   },
-  expenseListContent: {
+  content: {
     padding: 20,
-    paddingBottom: 40,
   },
   card: {
     backgroundColor: '#FFFFFF',
     borderRadius: 16,
     padding: 20,
-    marginBottom: 24,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.05,
@@ -255,42 +201,5 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 16,
     fontWeight: '600',
-  },
-  filterSection: {
-    marginBottom: 12,
-  },
-  expenseItem: {
-    backgroundColor: '#FFFFFF',
-    padding: 16,
-    borderRadius: 12,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 12,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.03,
-    shadowRadius: 5,
-    elevation: 2,
-    borderWidth: 1,
-    borderColor: '#F1F5F9',
-  },
-  expenseLeft: {
-    flex: 1,
-  },
-  expenseText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#0F172A',
-    marginBottom: 4,
-  },
-  expenseDate: {
-    fontSize: 13,
-    color: '#64748B',
-  },
-  expenseAmount: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: '#6366F1',
   },
 });

@@ -5,163 +5,138 @@ import {
   TextInput,
   FlatList,
   StyleSheet,
-  TouchableOpacity,
-  KeyboardAvoidingView,
   Platform,
 } from 'react-native';
-import { Picker } from '@react-native-picker/picker'; // Step 1: Add Picker
-
-type Expense = {
-  id: string;
-  description: string;
-  amount: number;
-  category: string;
-};
-
-const categories = ['Food', 'Transport', 'Shopping', 'Utilities', 'Other'];
+import { Picker } from '@react-native-picker/picker';
+import { useExpenses } from '../context/ExpenseContext';
 
 export default function ExpensesScreen() {
-  const [description, setDescription] = useState('');
-  const [amount, setAmount] = useState('');
-  const [category, setCategory] = useState('');
-  const [expenses, setExpenses] = useState<Expense[]>([]);
+  const { expenses } = useExpenses();
+  const [filterCategory, setFilterCategory] = useState('');
 
-  const handleAddExpense = () => {
-    if (!description || !amount || !category) return;
-
-    const newExpense: Expense = {
-      id: Date.now().toString(),
-      description,
-      amount: parseFloat(amount),
-      category,
-    };
-
-    setExpenses((prev) => [newExpense, ...prev]);
-    setDescription('');
-    setAmount('');
-    setCategory('');
-  };
+  const filteredExpenses = expenses.filter((exp) => {
+    return filterCategory ? exp.category === filterCategory : true;
+  });
 
   return (
-    <KeyboardAvoidingView
-      style={styles.container}
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-    >
-      <Text style={styles.title}>Add New Expense</Text>
+    <View style={styles.container}>
+      <View style={styles.header}>
+        <Text style={styles.title}>All Expenses</Text>
+      </View>
 
-      <TextInput
-        placeholder="Description"
-        style={styles.input}
-        value={description}
-        onChangeText={setDescription}
-      />
-      <TextInput
-        placeholder="Amount (KES)"
-        style={styles.input}
-        value={amount}
-        onChangeText={setAmount}
-        keyboardType="numeric"
-      />
-
-      {/* Step 2: Add Category Picker */}
-      <Picker
-        selectedValue={category}
-        onValueChange={(itemValue) => setCategory(itemValue)}
-        style={[styles.input, { paddingVertical: 0 }]}
-      >
-        <Picker.Item label="Select Category" value="" />
-        {categories.map((cat) => (
-          <Picker.Item key={cat} label={cat} value={cat} />
-        ))}
-      </Picker>
-
-      <TouchableOpacity style={styles.addButton} onPress={handleAddExpense}>
-        <Text style={styles.addButtonText}>➕ Add Expense</Text>
-      </TouchableOpacity>
-
-      <Text style={styles.listTitle}>Your Expenses</Text>
       <FlatList
-        data={expenses}
+        data={filteredExpenses}
         keyExtractor={(item) => item.id}
+        ListHeaderComponent={
+          <View style={styles.filterSection}>
+            <Text style={styles.sectionTitle}>Recent Expenses</Text>
+            <View style={styles.pickerContainer}>
+              <Picker
+                selectedValue={filterCategory}
+                onValueChange={(value) => setFilterCategory(value)}
+                style={styles.picker}
+              >
+                <Picker.Item label="All Categories" value="" />
+                <Picker.Item label="Food" value="Food" />
+                <Picker.Item label="Transport" value="Transport" />
+                <Picker.Item label="Utilities" value="Utilities" />
+                <Picker.Item label="Entertainment" value="Entertainment" />
+                <Picker.Item label="Others" value="Others" />
+              </Picker>
+            </View>
+          </View>
+        }
         renderItem={({ item }) => (
           <View style={styles.expenseItem}>
-            <View>
+            <View style={styles.expenseLeft}>
               <Text style={styles.expenseText}>{item.description}</Text>
-              <Text style={styles.expenseDate}>Category: {item.category}</Text>
+              <Text style={styles.expenseDate}>
+                {item.category} • {new Date(item.date).toDateString()}
+              </Text>
             </View>
             <Text style={styles.expenseAmount}>KES {item.amount.toFixed(2)}</Text>
           </View>
         )}
-        style={styles.expenseList}
+        contentContainerStyle={styles.expenseListContent}
+        showsVerticalScrollIndicator={false}
       />
-    </KeyboardAvoidingView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, padding: 20, backgroundColor: '#f8f9fa' },
+  container: {
+    flex: 1,
+    backgroundColor: '#F8FAFC',
+  },
+  header: {
+    paddingHorizontal: 20,
+    paddingTop: Platform.OS === 'android' ? 60 : 70,
+    paddingBottom: 20,
+    backgroundColor: '#FFFFFF',
+    borderBottomWidth: 1,
+    borderBottomColor: '#E2E8F0',
+  },
   title: {
     fontSize: 22,
-    fontWeight: 'bold',
-    marginBottom: 12,
-    color: '#333',
+    fontWeight: '800',
+    color: '#0F172A',
   },
-  input: {
-    borderColor: '#ccc',
-    borderWidth: 1,
-    marginBottom: 12,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    borderRadius: 8,
-    backgroundColor: '#fff',
+  expenseListContent: {
+    padding: 20,
+    paddingBottom: 40,
   },
-  addButton: {
-    backgroundColor: '#007bff',
-    padding: 12,
-    borderRadius: 8,
-    alignItems: 'center',
-    marginBottom: 20,
-  },
-  addButtonText: {
-    color: '#fff',
-    fontWeight: '600',
-    fontSize: 16,
-  },
-  listTitle: {
+  sectionTitle: {
     fontSize: 18,
-    fontWeight: 'bold',
-    marginBottom: 10,
-    color: '#444',
+    fontWeight: '700',
+    color: '#1E293B',
+    marginBottom: 16,
   },
-  expenseList: {
-    flexGrow: 1,
+  pickerContainer: {
+    backgroundColor: '#F1F5F9',
+    borderRadius: 12,
+    marginBottom: 12,
+    overflow: 'hidden',
+  },
+  picker: {
+    height: 55,
+    width: '100%',
+  },
+  filterSection: {
+    marginBottom: 12,
   },
   expenseItem: {
-    backgroundColor: '#fff',
+    backgroundColor: '#FFFFFF',
     padding: 16,
-    marginBottom: 10,
-    borderRadius: 8,
-    elevation: 1,
+    borderRadius: 12,
     flexDirection: 'row',
     justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
     shadowColor: '#000',
-    shadowOpacity: 0.1,
     shadowOffset: { width: 0, height: 2 },
-    shadowRadius: 4,
+    shadowOpacity: 0.03,
+    shadowRadius: 5,
+    elevation: 2,
+    borderWidth: 1,
+    borderColor: '#F1F5F9',
+  },
+  expenseLeft: {
+    flex: 1,
   },
   expenseText: {
     fontSize: 16,
-    fontWeight: '500',
-    color: '#222',
+    fontWeight: '600',
+    color: '#0F172A',
+    marginBottom: 4,
   },
   expenseDate: {
-    fontSize: 12,
-    color: '#999',
-    marginTop: 4,
+    fontSize: 13,
+    color: '#64748B',
   },
   expenseAmount: {
     fontSize: 16,
-    fontWeight: 'bold',
-    color: '#28a745',
+    fontWeight: '700',
+    color: '#6366F1',
   },
 });
