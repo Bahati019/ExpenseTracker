@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -9,13 +9,18 @@ import {
   KeyboardAvoidingView,
   ScrollView,
   Dimensions,
+  PermissionsAndroid,
 } from 'react-native';
 import { Picker } from '@react-native-picker/picker';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { PieChart } from 'react-native-chart-kit';
+// @ts-ignore
+import SmsListener from 'react-native-android-sms-listener';
+
 import { useAuth } from '../context/AuthContext';
 import { useExpenses, Expense } from '../context/ExpenseContext';
 import { useThemeColors } from '../theme';
+import { parseMPesaSMS } from '../utils/mpesaParser';
 
 const screenWidth = Dimensions.get('window').width;
 
@@ -37,6 +42,60 @@ export default function DashboardScreen() {
   const [category, setCategory] = useState('');
   const [date, setDate] = useState(new Date());
   const [showDatePicker, setShowDatePicker] = useState(false);
+
+  // Request SMS Permission and start listener
+  useEffect(() => {
+    async function requestSmsPermission() {
+      if (Platform.OS === 'android') {
+        try {
+          const granted = await PermissionsAndroid.request(
+            PermissionsAndroid.PERMISSIONS.RECEIVE_SMS,
+            {
+              title: 'M-Pesa SMS Auto-Read',
+              message: 'We need permission to read your incoming SMS to automatically pull M-Pesa receipts.',
+              buttonNeutral: 'Ask Me Later',
+              buttonNegative: 'Cancel',
+              buttonPositive: 'OK',
+            }
+          );
+          if (granted === PermissionsAndroid.RESULTS.GRANTED) {
+            console.log('SMS permission granted');
+          } else {
+            console.log('SMS permission denied');
+          }
+        } catch (err) {
+          console.warn(err);
+        }
+      }
+    }
+    
+    requestSmsPermission();
+
+    const subscription = SmsListener.addListener((message: { originatingAddress: string, body: string, timestamp: number }) => {
+      // Typically M-Pesa comes from "MPESA"
+      if (message.originatingAddress === 'MPESA' || message.body.includes('Ksh')) {
+        const parsed = parseMPesaSMS(message.body);
+        if (parsed) {
+          setDescription(parsed.description);
+          setAmount(parsed.amount.toString());
+          setDate(parsed.date);
+          
+          if (parsed.type === 'AIRTIME') {
+            setCategory('Utilities');
+          } else if (parsed.type === 'PAYMENT' && parsed.description.toLowerCase().includes('naivas')) {
+            setCategory('Food');
+          } else {
+             // Leave empty for user to pick
+            setCategory('');
+          }
+        }
+      }
+    });
+
+    return () => {
+      subscription.remove();
+    };
+  }, []);
 
   const handleAddExpense = () => {
     if (!description || !amount || !category) return;
