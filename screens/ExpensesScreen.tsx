@@ -2,26 +2,41 @@ import React, { useState } from 'react';
 import {
   View,
   Text,
-  TextInput,
   FlatList,
   StyleSheet,
   Platform,
+  TouchableOpacity,
+  Alert,
 } from 'react-native';
 import { Picker } from '@react-native-picker/picker';
 import { useExpenses } from '../context/ExpenseContext';
+import { Ionicons } from '@expo/vector-icons';
+import { useThemeColors } from '../theme';
 
 export default function ExpensesScreen() {
-  const { expenses } = useExpenses();
+  const { expenses, removeExpense } = useExpenses();
+  const theme = useThemeColors();
   const [filterCategory, setFilterCategory] = useState('');
 
   const filteredExpenses = expenses.filter((exp) => {
     return filterCategory ? exp.category === filterCategory : true;
   });
 
+  const handleDelete = (id: string) => {
+    Alert.alert(
+      'Delete Expense',
+      'Are you sure you want to delete this expense?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Delete', style: 'destructive', onPress: () => removeExpense(id) },
+      ]
+    );
+  };
+
   return (
-    <View style={styles.container}>
-      <View style={styles.header}>
-        <Text style={styles.title}>All Expenses</Text>
+    <View style={[styles.container, { backgroundColor: theme.background }]}>
+      <View style={[styles.header, { backgroundColor: theme.card, borderBottomColor: theme.border }]}>
+        <Text style={[styles.title, { color: theme.text }]}>All Expenses</Text>
       </View>
 
       <FlatList
@@ -29,14 +44,14 @@ export default function ExpensesScreen() {
         keyExtractor={(item) => item.id}
         ListHeaderComponent={
           <View style={styles.filterSection}>
-            <Text style={styles.sectionTitle}>Recent Expenses</Text>
-            <View style={styles.pickerContainer}>
+            <Text style={[styles.sectionTitle, { color: theme.text }]}>Recent Expenses</Text>
+            <View style={[styles.pickerContainer, { backgroundColor: theme.inputBackground }]}>
               <Picker
                 selectedValue={filterCategory}
                 onValueChange={(value) => setFilterCategory(value)}
-                style={styles.picker}
+                style={[styles.picker, { color: theme.text }]}
               >
-                <Picker.Item label="All Categories" value="" />
+                <Picker.Item label="All Categories" value="" color={theme.textSecondary} />
                 <Picker.Item label="Food" value="Food" />
                 <Picker.Item label="Transport" value="Transport" />
                 <Picker.Item label="Utilities" value="Utilities" />
@@ -47,14 +62,19 @@ export default function ExpensesScreen() {
           </View>
         }
         renderItem={({ item }) => (
-          <View style={styles.expenseItem}>
+          <View style={[styles.expenseItem, { backgroundColor: theme.card, borderColor: theme.border, shadowColor: theme.text }]}>
             <View style={styles.expenseLeft}>
-              <Text style={styles.expenseText}>{item.description}</Text>
-              <Text style={styles.expenseDate}>
+              <Text style={[styles.expenseText, { color: theme.text }]}>{item.description}</Text>
+              <Text style={[styles.expenseDate, { color: theme.textSecondary }]}>
                 {item.category} • {new Date(item.date).toDateString()}
               </Text>
             </View>
-            <Text style={styles.expenseAmount}>KES {item.amount.toFixed(2)}</Text>
+            <View style={styles.expenseRight}>
+              <Text style={[styles.expenseAmount, { color: theme.primary }]}>KES {item.amount.toFixed(2)}</Text>
+              <TouchableOpacity onPress={() => handleDelete(item.id)} style={[styles.deleteButton, { backgroundColor: theme.dangerBg }]}>
+                <Ionicons name="trash-outline" size={20} color={theme.danger} />
+              </TouchableOpacity>
+            </View>
           </View>
         )}
         contentContainerStyle={styles.expenseListContent}
@@ -67,20 +87,16 @@ export default function ExpensesScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F8FAFC',
   },
   header: {
     paddingHorizontal: 20,
     paddingTop: Platform.OS === 'android' ? 60 : 70,
     paddingBottom: 20,
-    backgroundColor: '#FFFFFF',
     borderBottomWidth: 1,
-    borderBottomColor: '#E2E8F0',
   },
   title: {
     fontSize: 22,
     fontWeight: '800',
-    color: '#0F172A',
   },
   expenseListContent: {
     padding: 20,
@@ -89,11 +105,9 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: 18,
     fontWeight: '700',
-    color: '#1E293B',
     marginBottom: 16,
   },
   pickerContainer: {
-    backgroundColor: '#F1F5F9',
     borderRadius: 12,
     marginBottom: 12,
     overflow: 'hidden',
@@ -106,37 +120,40 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   expenseItem: {
-    backgroundColor: '#FFFFFF',
     padding: 16,
     borderRadius: 12,
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     marginBottom: 12,
-    shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.03,
     shadowRadius: 5,
     elevation: 2,
     borderWidth: 1,
-    borderColor: '#F1F5F9',
   },
   expenseLeft: {
     flex: 1,
   },
+  expenseRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
   expenseText: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#0F172A',
     marginBottom: 4,
   },
   expenseDate: {
     fontSize: 13,
-    color: '#64748B',
   },
   expenseAmount: {
     fontSize: 16,
     fontWeight: '700',
-    color: '#6366F1',
+    marginRight: 12,
+  },
+  deleteButton: {
+    padding: 6,
+    borderRadius: 8,
   },
 });
