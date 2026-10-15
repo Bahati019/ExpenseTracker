@@ -9,6 +9,7 @@ import LoginScreen from '../screens/LoginScreen';
 import RegisterScreen from '../screens/RegisterScreen';
 import DashboardScreen from '../screens/DashboardScreen';
 import ExpensesScreen from '../screens/ExpensesScreen';
+import BudgetsScreen from '../screens/BudgetsScreen';
 import { useThemeColors } from '../theme';
 
 export type RootStackParamList = {
@@ -33,6 +34,8 @@ function MainTabs() {
             iconName = focused ? 'home' : 'home-outline';
           } else if (route.name === 'Expenses') {
             iconName = focused ? 'list' : 'list-outline';
+          } else if (route.name === 'Budgets') {
+            iconName = focused ? 'pie-chart' : 'pie-chart-outline';
           }
           return <Ionicons name={iconName} size={size} color={color} />;
         },
@@ -45,6 +48,7 @@ function MainTabs() {
       })}
     >
       <Tab.Screen name="Dashboard" component={DashboardScreen} />
+      <Tab.Screen name="Budgets" component={BudgetsScreen} />
       <Tab.Screen name="Expenses" component={ExpensesScreen} />
     </Tab.Navigator>
   );

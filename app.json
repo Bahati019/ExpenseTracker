@@ -23,8 +23,11 @@
       "edgeToEdgeEnabled": true,
       "permissions": [
         "READ_SMS",
+        "RECEIVE_SMS",
+        "READ_SMS",
         "RECEIVE_SMS"
-      ]
+      ],
+      "package": "com.bahati019.ExpensesTrackerApp"
     },
     "web": {
       "favicon": "./assets/favicon.png"
