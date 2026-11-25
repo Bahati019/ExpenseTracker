@@ -2,6 +2,7 @@ import React, { createContext, useState, useContext, ReactNode, useEffect } from
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Notifications from 'expo-notifications';
 import { Platform } from 'react-native';
+import { guessCategory } from '../utils/mpesaParser';
 
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
@@ -54,12 +55,25 @@ export const ExpenseProvider = ({ children }: { children: ReactNode }) => {
     }
   }, []);
 
-  // Load from storage on mount
+  // Load from storage on mount & auto-reclassify any merchants like Quickmart, Naivas, Glovo
   useEffect(() => {
     const loadData = async () => {
       try {
         const storedExpenses = await AsyncStorage.getItem(EXPENSES_STORAGE_KEY);
-        if (storedExpenses) setExpenses(JSON.parse(storedExpenses));
+        if (storedExpenses) {
+          const parsed: Expense[] = JSON.parse(storedExpenses);
+          // Auto-heal: If an expense was stored as 'Others', re-evaluate with the enhanced parser
+          const upgraded = parsed.map((exp) => {
+            if (!exp.category || exp.category === 'Others') {
+              const guessed = guessCategory(exp.description, 'PAYMENT');
+              if (guessed && guessed !== 'Others') {
+                return { ...exp, category: guessed };
+              }
+            }
+            return exp;
+          });
+          setExpenses(upgraded);
+        }
 
         const storedBudgets = await AsyncStorage.getItem(BUDGETS_STORAGE_KEY);
         if (storedBudgets) setBudgets(JSON.parse(storedBudgets));
@@ -89,23 +103,31 @@ export const ExpenseProvider = ({ children }: { children: ReactNode }) => {
 
   const addExpense = (expense: Expense) => {
     setExpenses((prev) => {
-      if (prev.some(e => e.id === expense.id)) return prev;
-      const newExpenses = [expense, ...prev];
-      
+      if (prev.some((e) => e.id === expense.id)) return prev;
+
+      // Ensure proper category assignment
+      const targetCategory =
+        !expense.category || expense.category === 'Others'
+          ? guessCategory(expense.description, 'PAYMENT')
+          : expense.category;
+      const finalExpense = { ...expense, category: targetCategory || 'Others' };
+
+      const newExpenses = [finalExpense, ...prev];
+
       // Check Budgets
-      if (expense.category && budgets[expense.category]) {
-        const limit = budgets[expense.category];
+      if (finalExpense.category && budgets[finalExpense.category]) {
+        const limit = budgets[finalExpense.category];
         const currentTotal = newExpenses
-          .filter(e => e.category === expense.category)
+          .filter((e) => e.category === finalExpense.category)
           .reduce((sum, e) => sum + e.amount, 0);
-          
-        const previousTotal = currentTotal - expense.amount;
-        
+
+        const previousTotal = currentTotal - finalExpense.amount;
+
         if (currentTotal >= limit && previousTotal < limit) {
           Notifications.scheduleNotificationAsync({
             content: {
               title: `Budget Exceeded! 🚨`,
-              body: `You have exceeded your ${expense.category} budget of KES ${limit}.`,
+              body: `You have exceeded your ${finalExpense.category} budget of KES ${limit}.`,
             },
             trigger: null,
           });
@@ -113,7 +135,7 @@ export const ExpenseProvider = ({ children }: { children: ReactNode }) => {
           Notifications.scheduleNotificationAsync({
             content: {
               title: `Budget Warning ⚠️`,
-              body: `You've used 80% of your ${expense.category} budget (KES ${limit}).`,
+              body: `You've used 80% of your ${finalExpense.category} budget (KES ${limit}).`,
             },
             trigger: null,
           });
@@ -126,8 +148,15 @@ export const ExpenseProvider = ({ children }: { children: ReactNode }) => {
 
   const addExpenses = (newItems: Expense[]) => {
     setExpenses((prev) => {
-      const existingIds = new Set(prev.map(e => e.id));
-      const toAdd = newItems.filter(item => !existingIds.has(item.id));
+      const existingIds = new Set(prev.map((e) => e.id));
+      const processed = newItems.map((item) => {
+        const targetCategory =
+          !item.category || item.category === 'Others'
+            ? guessCategory(item.description, 'PAYMENT')
+            : item.category;
+        return { ...item, category: targetCategory || 'Others' };
+      });
+      const toAdd = processed.filter((item) => !existingIds.has(item.id));
       if (toAdd.length === 0) return prev;
       return [...toAdd, ...prev];
     });
@@ -140,17 +169,27 @@ export const ExpenseProvider = ({ children }: { children: ReactNode }) => {
   };
 
   const removeExpense = (id: string) => {
-    setExpenses((prev) => prev.filter(exp => exp.id !== id));
+    setExpenses((prev) => prev.filter((exp) => exp.id !== id));
   };
 
   const setBudget = (category: string, amount: number) => {
     setBudgets((prev) => ({ ...prev, [category]: amount }));
   };
 
-  if (!isLoaded) return null; // Or a loading spinner
+  if (!isLoaded) return null;
 
   return (
-    <ExpenseContext.Provider value={{ expenses, budgets, addExpense, addExpenses, updateExpense, removeExpense, setBudget }}>
+    <ExpenseContext.Provider
+      value={{
+        expenses,
+        budgets,
+        addExpense,
+        addExpenses,
+        updateExpense,
+        removeExpense,
+        setBudget,
+      }}
+    >
       {children}
     </ExpenseContext.Provider>
   );

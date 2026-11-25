@@ -555,13 +555,22 @@ export default function DashboardScreen({ navigation }: any) {
           <View style={[styles.avatarCircle, { backgroundColor: theme.primary }]}>
             <Text style={styles.avatarInitial}>{initial}</Text>
           </View>
+
+
+
           <View>
             <Text style={[styles.headerSubtitle, { color: theme.textSecondary }]}>{greeting},</Text>
             <View style={styles.headerNameRow}>
               <Text style={[styles.title, { color: theme.text }]}>{displayName} 👋</Text>
               <Ionicons name="chevron-down" size={14} color={theme.textSecondary} />
             </View>
+
+
+
           </View>
+
+
+
         </TouchableOpacity>
 
         <View style={styles.headerRight}>
@@ -601,7 +610,13 @@ export default function DashboardScreen({ navigation }: any) {
             <Ionicons name="settings-outline" size={18} color={theme.text} />
           </TouchableOpacity>
         </View>
+
+
+
       </View>
+
+
+
 
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
         {/* Hero Card: Financial Balance for Selected Month */}
@@ -637,6 +652,9 @@ export default function DashboardScreen({ navigation }: any) {
             </TouchableOpacity>
           </View>
 
+
+
+
           {/* Balance & Month Heading */}
           <View style={styles.heroHeader}>
             <View>
@@ -647,6 +665,9 @@ export default function DashboardScreen({ navigation }: any) {
                 {formatCurrency(totalExpenses)}
               </Text>
             </View>
+
+
+
 
             {!isCurrentMonth && (
               <TouchableOpacity
@@ -659,12 +680,18 @@ export default function DashboardScreen({ navigation }: any) {
             )}
           </View>
 
+
+
+
           {/* Quick Metrics Bar for Selected Month */}
           <View style={[styles.metricsRow, { borderTopColor: theme.borderLight }]}>
             <View style={styles.metricItem}>
               <Text style={[styles.metricLabel, { color: theme.textSecondary }]}>Transactions</Text>
               <Text style={[styles.metricValue, { color: theme.text }]}>{filteredExpenses.length}</Text>
             </View>
+
+
+
 
             <View style={[styles.metricDivider, { backgroundColor: theme.border }]} />
 
@@ -674,6 +701,9 @@ export default function DashboardScreen({ navigation }: any) {
                 {topCategory.name}
               </Text>
             </View>
+
+
+
 
             <View style={[styles.metricDivider, { backgroundColor: theme.border }]} />
 
@@ -685,7 +715,13 @@ export default function DashboardScreen({ navigation }: any) {
                   : 'KES 0'}
               </Text>
             </View>
+
+
+
           </View>
+
+
+
 
           {/* Category Pie Chart & Breakdown Bars for Selected Month */}
           {filteredExpenses.length > 0 ? (
@@ -715,10 +751,16 @@ export default function DashboardScreen({ navigation }: any) {
                           {item.name}
                         </Text>
                       </View>
+
+
+
                       <Text style={[styles.allocationAmount, { color: theme.textSecondary }]}>
                         {formatCurrency(item.amount)} ({item.percent}%)
                       </Text>
                     </View>
+
+
+
                     <View style={[styles.allocationTrack, { backgroundColor: theme.inputBackground }]}>
                       <View
                         style={[
@@ -727,10 +769,22 @@ export default function DashboardScreen({ navigation }: any) {
                         ]}
                       />
                     </View>
+
+
+
                   </View>
+
+
+
                 ))}
               </View>
+
+
+
             </View>
+
+
+
           ) : (
             <View style={styles.emptyChartBox}>
               <Ionicons name="pie-chart-outline" size={36} color={theme.textTertiary} />
@@ -738,8 +792,14 @@ export default function DashboardScreen({ navigation }: any) {
                 No expenses recorded for {selectedMonthLabel}.
               </Text>
             </View>
+
+
+
           )}
         </View>
+
+
+
 
         {/* Smart Contextual Insight Banner */}
         <View
@@ -774,6 +834,9 @@ export default function DashboardScreen({ navigation }: any) {
               }
             />
           </View>
+
+
+
           <View style={styles.insightTextGroup}>
             <Text
               style={[
@@ -794,7 +857,13 @@ export default function DashboardScreen({ navigation }: any) {
               {smartInsight.message}
             </Text>
           </View>
+
+
+
         </View>
+
+
+
 
         {/* Quick Action Row */}
         <View style={styles.actionRow}>
@@ -824,6 +893,9 @@ export default function DashboardScreen({ navigation }: any) {
           </TouchableOpacity>
         </View>
 
+
+
+
         {/* Live M-Pesa Sync Banner */}
         <TouchableOpacity
           onPress={() => syncMpesaSms(false)}
@@ -834,6 +906,9 @@ export default function DashboardScreen({ navigation }: any) {
             <View style={[styles.syncIconCircle, { backgroundColor: theme.successBg }]}>
               <Ionicons name="phone-portrait-outline" size={22} color={theme.success} />
             </View>
+
+
+
             <View style={styles.syncStatusTextGroup}>
               <View style={styles.syncStatusHeader}>
                 <Text style={[styles.syncStatusTitle, { color: theme.text }]}>M-Pesa Smart Reader</Text>
@@ -841,12 +916,24 @@ export default function DashboardScreen({ navigation }: any) {
                   <View style={[styles.statusDot, { backgroundColor: theme.success }]} />
                   <Text style={[styles.statusBadgeText, { color: theme.success }]}>Active</Text>
                 </View>
+
+
+
               </View>
+
+
+
               <Text style={[styles.syncStatusDesc, { color: theme.textSecondary }]}>
                 SMS receipts are automatically tracked in real-time.
               </Text>
             </View>
+
+
+
           </View>
+
+
+
           <Ionicons name="chevron-forward" size={18} color={theme.textTertiary} />
         </TouchableOpacity>
 
@@ -863,6 +950,9 @@ export default function DashboardScreen({ navigation }: any) {
             </TouchableOpacity>
           )}
         </View>
+
+
+
 
         {recentExpenses.length > 0 ? (
           <View style={[styles.recentCard, { backgroundColor: theme.card, borderColor: theme.border }]}>
@@ -885,6 +975,9 @@ export default function DashboardScreen({ navigation }: any) {
                     <Ionicons name={meta.icon as any} size={20} color={meta.color} />
                   </View>
 
+
+
+
                   <View style={styles.transactionMiddle}>
                     <Text style={[styles.transactionTitle, { color: theme.text }]} numberOfLines={1}>
                       {item.description}
@@ -900,9 +993,18 @@ export default function DashboardScreen({ navigation }: any) {
                         <View style={[styles.mpesaBadge, { backgroundColor: theme.successBg }]}>
                           <Text style={[styles.mpesaBadgeText, { color: theme.success }]}>M-PESA</Text>
                         </View>
+
+
+
                       )}
                     </View>
+
+
+
                   </View>
+
+
+
 
                   <Text style={[styles.transactionAmount, { color: theme.text }]}>
                     {formatCurrency(item.amount)}
@@ -911,6 +1013,9 @@ export default function DashboardScreen({ navigation }: any) {
               );
             })}
           </View>
+
+
+
         ) : (
           <View style={[styles.emptyRecentCard, { backgroundColor: theme.card, borderColor: theme.border }]}>
             <Ionicons name="receipt-outline" size={32} color={theme.textTertiary} />
@@ -918,6 +1023,9 @@ export default function DashboardScreen({ navigation }: any) {
               No expenses recorded in {selectedMonthLabel}.
             </Text>
           </View>
+
+
+
         )}
       </ScrollView>
 
@@ -947,19 +1055,31 @@ export default function DashboardScreen({ navigation }: any) {
               </TouchableOpacity>
             </View>
 
+
+
+
             <ScrollView showsVerticalScrollIndicator={false}>
               {/* User Identity Card */}
               <View style={[styles.userProfileCard, { backgroundColor: theme.inputBackground }]}>
                 <View style={[styles.largeAvatar, { backgroundColor: theme.primary }]}>
                   <Text style={styles.largeAvatarText}>{initial}</Text>
                 </View>
+
+
+
                 <View style={styles.userProfileInfo}>
                   <Text style={[styles.userProfileName, { color: theme.text }]}>{displayName}</Text>
                   <Text style={[styles.userProfileEmail, { color: theme.textSecondary }]}>
                     {user?.email || 'charity@example.com'}
                   </Text>
                 </View>
+
+
+
               </View>
+
+
+
 
               {/* Theme Selector */}
               <Text style={[styles.sheetSectionTitle, { color: theme.textSecondary }]}>Appearance</Text>
@@ -998,6 +1118,9 @@ export default function DashboardScreen({ navigation }: any) {
                 })}
               </View>
 
+
+
+
               {/* Financial Snapshot */}
               <Text style={[styles.sheetSectionTitle, { color: theme.textSecondary }]}>Financial Snapshot</Text>
               <View style={[styles.statsGrid, { backgroundColor: theme.inputBackground }]}>
@@ -1005,6 +1128,9 @@ export default function DashboardScreen({ navigation }: any) {
                   <Text style={[styles.statBoxNumber, { color: theme.text }]}>{expenses.length}</Text>
                   <Text style={[styles.statBoxLabel, { color: theme.textSecondary }]}>Transactions</Text>
                 </View>
+
+
+
                 <View style={[styles.statDivider, { backgroundColor: theme.border }]} />
                 <View style={styles.statBox}>
                   <Text style={[styles.statBoxNumber, { color: theme.primary }]}>
@@ -1012,6 +1138,9 @@ export default function DashboardScreen({ navigation }: any) {
                   </Text>
                   <Text style={[styles.statBoxLabel, { color: theme.textSecondary }]}>Lifetime Spend</Text>
                 </View>
+
+
+
                 <View style={[styles.statDivider, { backgroundColor: theme.border }]} />
                 <View style={styles.statBox}>
                   <Text style={[styles.statBoxNumber, { color: theme.text }]}>
@@ -1019,7 +1148,13 @@ export default function DashboardScreen({ navigation }: any) {
                   </Text>
                   <Text style={[styles.statBoxLabel, { color: theme.textSecondary }]}>Budgets Set</Text>
                 </View>
+
+
+
               </View>
+
+
+
 
               {/* Data Actions */}
               <Text style={[styles.sheetSectionTitle, { color: theme.textSecondary }]}>Data & Sync</Text>
@@ -1031,6 +1166,9 @@ export default function DashboardScreen({ navigation }: any) {
                   <Ionicons name="document-text-outline" size={20} color={theme.primary} />
                   <Text style={[styles.sheetActionText, { color: theme.text }]}>Export All to CSV</Text>
                 </View>
+
+
+
                 <Ionicons name="download-outline" size={18} color={theme.textSecondary} />
               </TouchableOpacity>
 
@@ -1045,6 +1183,9 @@ export default function DashboardScreen({ navigation }: any) {
                   <Ionicons name="sync-outline" size={20} color={theme.success} />
                   <Text style={[styles.sheetActionText, { color: theme.text }]}>Scan M-Pesa SMS Inbox</Text>
                 </View>
+
+
+
                 <Ionicons name="chevron-forward" size={18} color={theme.textSecondary} />
               </TouchableOpacity>
 
@@ -1061,6 +1202,9 @@ export default function DashboardScreen({ navigation }: any) {
               </TouchableOpacity>
             </ScrollView>
           </View>
+
+
+
         </TouchableOpacity>
       </Modal>
 
@@ -1085,6 +1229,9 @@ export default function DashboardScreen({ navigation }: any) {
                 <Ionicons name="calendar" size={20} color={theme.primary} />
                 <Text style={[styles.modalTitle, { color: theme.text }]}>Select Month</Text>
               </View>
+
+
+
               <TouchableOpacity
                 onPress={() => setMonthPickerVisible(false)}
                 style={[styles.closeModalBtn, { backgroundColor: theme.inputBackground }]}
@@ -1092,6 +1239,9 @@ export default function DashboardScreen({ navigation }: any) {
                 <Ionicons name="close" size={20} color={theme.text} />
               </TouchableOpacity>
             </View>
+
+
+
 
             <ScrollView showsVerticalScrollIndicator={false} style={styles.monthListScroll}>
               {availableMonths.map((m) => {
@@ -1133,6 +1283,9 @@ export default function DashboardScreen({ navigation }: any) {
                       </Text>
                     </View>
 
+
+
+
                     <View style={styles.monthOptionRight}>
                       {isCurrent && (
                         <View style={[styles.currentBadge, { backgroundColor: theme.successBg }]}>
@@ -1140,16 +1293,25 @@ export default function DashboardScreen({ navigation }: any) {
                             Current
                           </Text>
                         </View>
+
+
+
                       )}
                       {isSelected && (
                         <Ionicons name="checkmark-circle" size={22} color={theme.primary} />
                       )}
                     </View>
+
+
+
                   </TouchableOpacity>
                 );
               })}
             </ScrollView>
           </View>
+
+
+
         </TouchableOpacity>
       </Modal>
 
@@ -1174,6 +1336,9 @@ export default function DashboardScreen({ navigation }: any) {
                 <Ionicons name="close" size={20} color={theme.text} />
               </TouchableOpacity>
             </View>
+
+
+
 
             <ScrollView showsVerticalScrollIndicator={false}>
               {/* Category Chips */}
@@ -1214,6 +1379,9 @@ export default function DashboardScreen({ navigation }: any) {
                 })}
               </View>
 
+
+
+
               {/* Amount Input */}
               <Text style={[styles.inputLabel, { color: theme.textSecondary }]}>Amount</Text>
               <View
@@ -1233,6 +1401,9 @@ export default function DashboardScreen({ navigation }: any) {
                   autoFocus={true}
                 />
               </View>
+
+
+
 
               {/* Description Input */}
               <Text style={[styles.inputLabel, { color: theme.textSecondary }]}>Description</Text>
@@ -1292,9 +1463,15 @@ export default function DashboardScreen({ navigation }: any) {
               </TouchableOpacity>
             </ScrollView>
           </View>
+
+
+
         </KeyboardAvoidingView>
       </Modal>
     </View>
+
+
+
   );
 }
 

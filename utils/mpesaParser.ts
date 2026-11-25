@@ -19,131 +19,211 @@ export interface MPesaTransaction {
   accountNumber?: string;
 }
 
-export function guessCategory(description: string, type: MPesaTransaction['type']): string {
-  const desc = description.toLowerCase();
-  
+export function guessCategory(
+  description: string,
+  type: MPesaTransaction['type'] = 'UNKNOWN',
+  fullSms?: string
+): string {
+  // Combine description and full SMS body so no merchant keywords are missed
+  const combined = `${description || ''} ${fullSms || ''}`.toLowerCase();
+
+  // 1. Rent & Housing
   if (
-    desc.includes('rent') ||
-    desc.includes('housing') ||
-    desc.includes('caretaker') ||
-    desc.includes('landlord') ||
-    desc.includes('property') ||
-    desc.includes('apartment') ||
-    desc.includes('apartments') ||
-    desc.includes('residence') ||
-    desc.includes('estate') ||
-    desc.includes('tenant') ||
-    desc.includes('court') ||
-    /\bhse\b/i.test(desc) ||
-    /\bhouse\b/i.test(desc)
+    combined.includes('rent') ||
+    combined.includes('housing') ||
+    combined.includes('caretaker') ||
+    combined.includes('landlord') ||
+    combined.includes('property') ||
+    combined.includes('apartment') ||
+    combined.includes('apartments') ||
+    combined.includes('residence') ||
+    combined.includes('estate') ||
+    combined.includes('tenant') ||
+    combined.includes('court') ||
+    combined.includes('hostel') ||
+    /\bhse\b/i.test(combined) ||
+    /\bhouse\b/i.test(combined)
   ) {
     return 'Rent & Housing';
   }
 
+  // 2. Utilities
   if (
     type === 'AIRTIME' ||
-    desc.includes('airtime') ||
-    desc.includes('safaricom') ||
-    desc.includes('kplc') ||
-    desc.includes('token') ||
-    desc.includes('kenya power') ||
-    desc.includes('stima') ||
-    desc.includes('prepaid') ||
-    desc.includes('postpaid') ||
-    desc.includes('water') ||
-    desc.includes('nairobi water') ||
-    desc.includes('sewerage') ||
-    desc.includes('wifi') ||
-    desc.includes('zuku') ||
-    desc.includes('internet') ||
-    desc.includes('faiba') ||
-    desc.includes('dstv') ||
-    desc.includes('gotv') ||
-    desc.includes('startimes') ||
-    desc.includes('electricity') ||
-    desc.includes('garbage') ||
-    desc.includes('clean')
+    combined.includes('airtime') ||
+    combined.includes('safaricom') ||
+    combined.includes('airtel') ||
+    combined.includes('telkom') ||
+    combined.includes('bundle') ||
+    combined.includes('kplc') ||
+    combined.includes('token') ||
+    combined.includes('kenya power') ||
+    combined.includes('stima') ||
+    combined.includes('prepaid') ||
+    combined.includes('postpaid') ||
+    combined.includes('water') ||
+    combined.includes('nairobi water') ||
+    combined.includes('sewerage') ||
+    combined.includes('maji') ||
+    combined.includes('wifi') ||
+    combined.includes('zuku') ||
+    combined.includes('internet') ||
+    combined.includes('faiba') ||
+    combined.includes('jtl') ||
+    combined.includes('dstv') ||
+    combined.includes('gotv') ||
+    combined.includes('startimes') ||
+    combined.includes('electricity') ||
+    combined.includes('garbage') ||
+    combined.includes('clean') ||
+    combined.includes('laundry')
   ) {
     return 'Utilities';
   }
-  
+
+  // 3. Food (Supermarkets, Groceries, Delivery apps, Restaurants, Fast Food, Cafes, Bars)
   if (
-    desc.includes('naivas') ||
-    desc.includes('quickmart') ||
-    desc.includes('carrefour') ||
-    desc.includes('supermarket') ||
-    desc.includes('java') ||
-    desc.includes('kfc') ||
-    desc.includes('restaurant') ||
-    desc.includes('cafe') ||
-    desc.includes('bakery') ||
-    desc.includes('butchery') ||
-    desc.includes('food') ||
-    desc.includes('groceries') ||
-    desc.includes('hotel') ||
-    desc.includes('lounge') ||
-    desc.includes('pizza') ||
-    desc.includes('artcaffe') ||
-    desc.includes('galitos') ||
-    desc.includes('chicken') ||
-    desc.includes('meat') ||
-    desc.includes('fruits') ||
-    desc.includes('vegetables') ||
-    desc.includes('mama mboga') ||
-    desc.includes('market') ||
-    desc.includes('greens') ||
-    desc.includes('snack') ||
-    desc.includes('bar') ||
-    desc.includes('pub') ||
-    desc.includes('grill') ||
-    desc.includes('choma') ||
-    desc.includes('coffee')
+    // Supermarkets & Groceries (including variations with spaces/hyphens)
+    combined.includes('naivas') ||
+    combined.includes('quickmart') ||
+    combined.includes('quick mart') ||
+    combined.includes('quick-mart') ||
+    combined.includes('quick_mart') ||
+    combined.includes('carrefour') ||
+    combined.includes('supermarket') ||
+    combined.includes('chandarana') ||
+    combined.includes('foodplus') ||
+    combined.includes('food plus') ||
+    combined.includes('cleanshelf') ||
+    combined.includes('eastmatt') ||
+    combined.includes('tuskys') ||
+    combined.includes('tumaini') ||
+    combined.includes('magunas') ||
+    combined.includes('kassmart') ||
+    combined.includes('choppies') ||
+    combined.includes('mama mboga') ||
+    combined.includes('market') ||
+    combined.includes('greens') ||
+    combined.includes('grocery') ||
+    combined.includes('groceries') ||
+    combined.includes('kibanda') ||
+    // Food Delivery
+    combined.includes('glovo') ||
+    combined.includes('bolt food') ||
+    combined.includes('uber eats') ||
+    combined.includes('ubereats') ||
+    combined.includes('jumia food') ||
+    // Restaurants, Fast Food, Bakeries, Butcheries
+    combined.includes('kfc') ||
+    combined.includes('java') ||
+    combined.includes('artcaffe') ||
+    combined.includes('artcaffé') ||
+    combined.includes('galitos') ||
+    combined.includes('pizza') ||
+    combined.includes('burger') ||
+    combined.includes('chicken') ||
+    combined.includes('subway') ||
+    combined.includes('big square') ||
+    combined.includes("cj's") ||
+    combined.includes('cjs') ||
+    combined.includes('dominos') ||
+    combined.includes('creamy inn') ||
+    combined.includes('pizza inn') ||
+    combined.includes('chicken inn') ||
+    combined.includes('bakers inn') ||
+    combined.includes('bakery') ||
+    combined.includes('bakes') ||
+    combined.includes('pastry') ||
+    combined.includes('butchery') ||
+    combined.includes('meat') ||
+    combined.includes('pork') ||
+    combined.includes('beef') ||
+    combined.includes('fish') ||
+    combined.includes('fruits') ||
+    combined.includes('vegetables') ||
+    combined.includes('restaurant') ||
+    combined.includes('cafe') ||
+    combined.includes('café') ||
+    combined.includes('coffee') ||
+    combined.includes('tea') ||
+    combined.includes('boba') ||
+    combined.includes('smoothie') ||
+    combined.includes('shawarma') ||
+    combined.includes('snack') ||
+    combined.includes('deli') ||
+    combined.includes('eatery') ||
+    combined.includes('dining') ||
+    combined.includes('hotel') ||
+    combined.includes('lounge') ||
+    combined.includes('grill') ||
+    combined.includes('choma') ||
+    combined.includes('food') ||
+    // Bars, Pubs & Drinks
+    combined.includes('bar') ||
+    combined.includes('pub') ||
+    combined.includes('liquor') ||
+    combined.includes('wines') ||
+    combined.includes('spirits') ||
+    combined.includes('brew')
   ) {
     return 'Food';
   }
-  
+
+  // 4. Transport (Cabs, Fuel, Public Transit)
   if (
-    desc.includes('uber') ||
-    desc.includes('bolt') ||
-    desc.includes('little') ||
-    desc.includes('shell') ||
-    desc.includes('total') ||
-    desc.includes('rubis') ||
-    desc.includes('petrol') ||
-    desc.includes('matatu') ||
-    desc.includes('fare') ||
-    desc.includes('fuel') ||
-    desc.includes('boda') ||
-    desc.includes('stage') ||
-    desc.includes('parking') ||
-    desc.includes('toll') ||
-    desc.includes('expressway') ||
-    desc.includes('sgr') ||
-    desc.includes('easy coach') ||
-    desc.includes('bus')
+    combined.includes('uber') ||
+    combined.includes('bolt') ||
+    combined.includes('little') ||
+    combined.includes('faras') ||
+    combined.includes('wasili') ||
+    combined.includes('shell') ||
+    combined.includes('total') ||
+    combined.includes('rubis') ||
+    combined.includes('petrol') ||
+    combined.includes('diesel') ||
+    combined.includes('fuel') ||
+    combined.includes('oil') ||
+    combined.includes('matatu') ||
+    combined.includes('fare') ||
+    combined.includes('boda') ||
+    combined.includes('bodaboda') ||
+    combined.includes('stage') ||
+    combined.includes('parking') ||
+    combined.includes('toll') ||
+    combined.includes('expressway') ||
+    combined.includes('sgr') ||
+    combined.includes('easy coach') ||
+    combined.includes('modern coast') ||
+    combined.includes('tahmeed') ||
+    combined.includes('shuttle') ||
+    combined.includes('bus')
   ) {
     return 'Transport';
   }
-  
+
+  // 5. Entertainment (Streaming, Cinema, Gaming, Betting, Events)
   if (
-    desc.includes('netflix') ||
-    desc.includes('showmax') ||
-    desc.includes('cinema') ||
-    desc.includes('movie') ||
-    desc.includes('spotify') ||
-    desc.includes('game') ||
-    desc.includes('gaming') ||
-    desc.includes('betting') ||
-    desc.includes('sportpesa') ||
-    desc.includes('betika') ||
-    desc.includes('mozzart') ||
-    desc.includes('ticket') ||
-    desc.includes('concert') ||
-    desc.includes('event')
+    combined.includes('netflix') ||
+    combined.includes('spotify') ||
+    combined.includes('cinema') ||
+    combined.includes('movie') ||
+    combined.includes('imax') ||
+    combined.includes('angate') ||
+    combined.includes('game') ||
+    combined.includes('gaming') ||
+    combined.includes('playstation') ||
+    combined.includes('betting') ||
+    combined.includes('sportpesa') ||
+    combined.includes('betika') ||
+    combined.includes('mozzart') ||
+    combined.includes('1xbet') ||
+    combined.includes('ticket') ||
+    combined.includes('concert') ||
+    combined.includes('event')
   ) {
     return 'Entertainment';
   }
-  
+
   return 'Others';
 }
 
@@ -167,7 +247,10 @@ export function parseMPesaSMS(smsBody: string): MPesaTransaction | null {
   }
 
   // Extract M-Pesa transaction ID (10 alphanumeric chars)
-  const idMatch = smsBody.match(/\b([A-Z0-9]{10})\s+Confirmed/i) || smsBody.match(/^([A-Z0-9]{10})/i) || smsBody.match(/\b([A-Z0-9]{10})\b/);
+  const idMatch =
+    smsBody.match(/\b([A-Z0-9]{10})\s+Confirmed/i) ||
+    smsBody.match(/^([A-Z0-9]{10})/i) ||
+    smsBody.match(/\b([A-Z0-9]{10})\b/);
   const id = idMatch ? idMatch[1].toUpperCase() : `MPESA_${Date.now()}`;
 
   // Extract Amount: e.g. "Ksh10.00", "Ksh 10.00", "Ksh. 10.00", "Ksh 10", "KES 1,500.00"
@@ -202,7 +285,9 @@ export function parseMPesaSMS(smsBody: string): MPesaTransaction | null {
       type = 'PAYMENT';
     }
 
-    const descMatch = smsBody.match(/(?:paid\s+to|paid\s+Ksh\.?\s*[\d,.]+\s*to)\s+(.*?)(?=\s+for\s+account|\s+on\s+|\s+for\s+|\.\s*|New M-PESA balance)/i);
+    const descMatch = smsBody.match(
+      /(?:paid\s+to|paid\s+Ksh\.?\s*[\d,.]+\s*to)\s+(.*?)(?=\s+for\s+account|\s+on\s+|\s+for\s+|\.\s*|New M-PESA balance)/i
+    );
     if (descMatch) {
       let merchant = descMatch[1].trim();
       // Clean up leading Paybill business numbers like "888880 - KPLC" -> "KPLC"
@@ -221,7 +306,9 @@ export function parseMPesaSMS(smsBody: string): MPesaTransaction | null {
   // 3. Sent to (P2P / Send Money)
   else if (/sent to/i.test(smsBody) || /sent.*?to/i.test(smsBody)) {
     type = 'SEND';
-    const descMatch = smsBody.match(/(?:sent to|sent\s+Ksh\.?\s*[\d,.]+\s*to)\s+(.*?)(?=\s+on\s+|\s+for\s+|\.\s*|New M-PESA balance)/i);
+    const descMatch = smsBody.match(
+      /(?:sent to|sent\s+Ksh\.?\s*[\d,.]+\s*to)\s+(.*?)(?=\s+on\s+|\s+for\s+|\.\s*|New M-PESA balance)/i
+    );
     if (descMatch) {
       let recipient = descMatch[1].trim();
       recipient = recipient.replace(/\s*(\+?254\d{9}|0[71]\d{8}|\d{9,12})$/, '').trim();
@@ -264,7 +351,7 @@ export function parseMPesaSMS(smsBody: string): MPesaTransaction | null {
     }
   }
 
-  const suggestedCategory = guessCategory(description, type);
+  const suggestedCategory = guessCategory(description, type, smsBody);
 
   return {
     id,
