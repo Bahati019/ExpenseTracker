@@ -26,6 +26,7 @@ interface ExpenseContextType {
   budgets: Record<string, number>;
   addExpense: (expense: Expense) => void;
   addExpenses: (newExpenses: Expense[]) => void;
+  updateExpense: (updatedExpense: Expense) => void;
   removeExpense: (id: string) => void;
   setBudget: (category: string, amount: number) => void;
 }
@@ -132,6 +133,12 @@ export const ExpenseProvider = ({ children }: { children: ReactNode }) => {
     });
   };
 
+  const updateExpense = (updatedExpense: Expense) => {
+    setExpenses((prev) =>
+      prev.map((exp) => (exp.id === updatedExpense.id ? updatedExpense : exp))
+    );
+  };
+
   const removeExpense = (id: string) => {
     setExpenses((prev) => prev.filter(exp => exp.id !== id));
   };
@@ -143,7 +150,7 @@ export const ExpenseProvider = ({ children }: { children: ReactNode }) => {
   if (!isLoaded) return null; // Or a loading spinner
 
   return (
-    <ExpenseContext.Provider value={{ expenses, budgets, addExpense, addExpenses, removeExpense, setBudget }}>
+    <ExpenseContext.Provider value={{ expenses, budgets, addExpense, addExpenses, updateExpense, removeExpense, setBudget }}>
       {children}
     </ExpenseContext.Provider>
   );

@@ -14,22 +14,55 @@ export interface MPesaTransaction {
   amount: number;
   description: string; // Merchant or Recipient Name
   date: Date;
-  type: 'PAYMENT' | 'SEND' | 'AIRTIME' | 'WITHDRAWAL' | 'UNKNOWN';
+  type: 'PAYMENT' | 'PAYBILL' | 'SEND' | 'AIRTIME' | 'WITHDRAWAL' | 'UNKNOWN';
   suggestedCategory: string;
+  accountNumber?: string;
 }
 
 export function guessCategory(description: string, type: MPesaTransaction['type']): string {
   const desc = description.toLowerCase();
   
   if (
+    desc.includes('rent') ||
+    desc.includes('housing') ||
+    desc.includes('caretaker') ||
+    desc.includes('landlord') ||
+    desc.includes('property') ||
+    desc.includes('apartment') ||
+    desc.includes('apartments') ||
+    desc.includes('residence') ||
+    desc.includes('estate') ||
+    desc.includes('tenant') ||
+    desc.includes('court') ||
+    /\bhse\b/i.test(desc) ||
+    /\bhouse\b/i.test(desc)
+  ) {
+    return 'Rent & Housing';
+  }
+
+  if (
     type === 'AIRTIME' ||
     desc.includes('airtime') ||
+    desc.includes('safaricom') ||
     desc.includes('kplc') ||
     desc.includes('token') ||
+    desc.includes('kenya power') ||
+    desc.includes('stima') ||
+    desc.includes('prepaid') ||
+    desc.includes('postpaid') ||
     desc.includes('water') ||
+    desc.includes('nairobi water') ||
+    desc.includes('sewerage') ||
     desc.includes('wifi') ||
     desc.includes('zuku') ||
-    desc.includes('internet')
+    desc.includes('internet') ||
+    desc.includes('faiba') ||
+    desc.includes('dstv') ||
+    desc.includes('gotv') ||
+    desc.includes('startimes') ||
+    desc.includes('electricity') ||
+    desc.includes('garbage') ||
+    desc.includes('clean')
   ) {
     return 'Utilities';
   }
@@ -46,7 +79,25 @@ export function guessCategory(description: string, type: MPesaTransaction['type'
     desc.includes('bakery') ||
     desc.includes('butchery') ||
     desc.includes('food') ||
-    desc.includes('groceries')
+    desc.includes('groceries') ||
+    desc.includes('hotel') ||
+    desc.includes('lounge') ||
+    desc.includes('pizza') ||
+    desc.includes('artcaffe') ||
+    desc.includes('galitos') ||
+    desc.includes('chicken') ||
+    desc.includes('meat') ||
+    desc.includes('fruits') ||
+    desc.includes('vegetables') ||
+    desc.includes('mama mboga') ||
+    desc.includes('market') ||
+    desc.includes('greens') ||
+    desc.includes('snack') ||
+    desc.includes('bar') ||
+    desc.includes('pub') ||
+    desc.includes('grill') ||
+    desc.includes('choma') ||
+    desc.includes('coffee')
   ) {
     return 'Food';
   }
@@ -61,7 +112,15 @@ export function guessCategory(description: string, type: MPesaTransaction['type'
     desc.includes('petrol') ||
     desc.includes('matatu') ||
     desc.includes('fare') ||
-    desc.includes('fuel')
+    desc.includes('fuel') ||
+    desc.includes('boda') ||
+    desc.includes('stage') ||
+    desc.includes('parking') ||
+    desc.includes('toll') ||
+    desc.includes('expressway') ||
+    desc.includes('sgr') ||
+    desc.includes('easy coach') ||
+    desc.includes('bus')
   ) {
     return 'Transport';
   }
@@ -73,7 +132,14 @@ export function guessCategory(description: string, type: MPesaTransaction['type'
     desc.includes('movie') ||
     desc.includes('spotify') ||
     desc.includes('game') ||
-    desc.includes('gaming')
+    desc.includes('gaming') ||
+    desc.includes('betting') ||
+    desc.includes('sportpesa') ||
+    desc.includes('betika') ||
+    desc.includes('mozzart') ||
+    desc.includes('ticket') ||
+    desc.includes('concert') ||
+    desc.includes('event')
   ) {
     return 'Entertainment';
   }
@@ -86,16 +152,16 @@ export function parseMPesaSMS(smsBody: string): MPesaTransaction | null {
 
   // Ignore received money for expenses tracker (income, not expense)
   if (
-    /received\s+Ksh/i.test(smsBody) || 
+    /received\s+(?:Ksh|KES)/i.test(smsBody) || 
     /you\s+have\s+received/i.test(smsBody) ||
-    /give\s+Ksh/i.test(smsBody)
+    /give\s+(?:Ksh|KES)/i.test(smsBody)
   ) {
     return null;
   }
 
   // Check if it's an M-Pesa message
-  const hasMpesaKeyword = /confirmed/i.test(smsBody) || /m-pesa/i.test(smsBody) || /mpesa/i.test(smsBody);
-  const hasCurrency = /Ksh/i.test(smsBody);
+  const hasMpesaKeyword = /confirmed|m-pesa|mpesa|paybill|buy goods|till/i.test(smsBody);
+  const hasCurrency = /(?:Ksh|KES)/i.test(smsBody);
   if (!hasMpesaKeyword || !hasCurrency) {
     return null;
   }
@@ -104,8 +170,8 @@ export function parseMPesaSMS(smsBody: string): MPesaTransaction | null {
   const idMatch = smsBody.match(/\b([A-Z0-9]{10})\s+Confirmed/i) || smsBody.match(/^([A-Z0-9]{10})/i) || smsBody.match(/\b([A-Z0-9]{10})\b/);
   const id = idMatch ? idMatch[1].toUpperCase() : `MPESA_${Date.now()}`;
 
-  // Extract Amount: e.g. "Ksh10.00", "Ksh 10.00", "Ksh. 10.00", "Ksh 10", "Ksh1,500.00"
-  const amountMatch = smsBody.match(/Ksh\.?\s*([\d,]+(?:\.\d{1,2})?)/i);
+  // Extract Amount: e.g. "Ksh10.00", "Ksh 10.00", "Ksh. 10.00", "Ksh 10", "KES 1,500.00"
+  const amountMatch = smsBody.match(/(?:Ksh|KES)\.?\s*([\d,]+(?:\.\d{1,2})?)/i);
   const amount = amountMatch ? parseFloat(amountMatch[1].replace(/,/g, '')) : 0;
   if (amount <= 0) {
     return null;
@@ -113,19 +179,43 @@ export function parseMPesaSMS(smsBody: string): MPesaTransaction | null {
 
   let description = 'M-Pesa Transaction';
   let type: MPesaTransaction['type'] = 'UNKNOWN';
+  let accountNumber: string | undefined = undefined;
 
   // 1. Bought Airtime
   if (/bought\s+Ksh/i.test(smsBody) || /bought.*?airtime/i.test(smsBody)) {
     type = 'AIRTIME';
     description = 'Airtime Purchase';
   }
-  // 2. Paid to (Buy Goods / Paybill / Till)
-  else if (/paid to/i.test(smsBody)) {
-    type = 'PAYMENT';
-    const descMatch = smsBody.match(/paid to\s+(.*?)(?=\s+on\s+|\s+for\s+account|\s+for\s+|\.\s*|New M-PESA balance)/i);
+  // 2. Paybill / Buy Goods / Merchant Payments
+  else if (
+    /paid\s+to/i.test(smsBody) ||
+    /paid\s+Ksh\.?\s*[\d,.]+\s*to/i.test(smsBody) ||
+    /paybill/i.test(smsBody) ||
+    /for\s+account/i.test(smsBody)
+  ) {
+    // Extract Paybill account number if present (e.g., "for account 12345678")
+    const accMatch = smsBody.match(/for\s+account\s+([A-Za-z0-9_\-\/.]+)/i);
+    if (accMatch) {
+      accountNumber = accMatch[1].replace(/\.+$/, '').trim();
+      type = 'PAYBILL';
+    } else {
+      type = 'PAYMENT';
+    }
+
+    const descMatch = smsBody.match(/(?:paid\s+to|paid\s+Ksh\.?\s*[\d,.]+\s*to)\s+(.*?)(?=\s+for\s+account|\s+on\s+|\s+for\s+|\.\s*|New M-PESA balance)/i);
     if (descMatch) {
-      description = descMatch[1].trim();
-      description = description.replace(/\.+$/, '').trim();
+      let merchant = descMatch[1].trim();
+      // Clean up leading Paybill business numbers like "888880 - KPLC" -> "KPLC"
+      merchant = merchant.replace(/^(\d{5,7}\s*[-–:]\s*)/, '').trim();
+      merchant = merchant.replace(/\.+$/, '').trim();
+
+      if (accountNumber) {
+        description = `${merchant} (Acc: ${accountNumber})`;
+      } else {
+        description = merchant;
+      }
+    } else if (accountNumber) {
+      description = `Paybill (Acc: ${accountNumber})`;
     }
   } 
   // 3. Sent to (P2P / Send Money)
