@@ -24,7 +24,7 @@ import SmsListener from 'react-native-android-sms-listener';
 // @ts-ignore
 import SmsAndroid from 'react-native-get-sms-android';
 
-import { useAuth } from '../context/AuthContext';
+import { useAuth, extractFirstName, getTimeBasedGreeting } from '../context/AuthContext';
 import { useExpenses, Expense } from '../context/ExpenseContext';
 import { useTheme, ThemeMode } from '../context/ThemeContext';
 import {
@@ -539,7 +539,8 @@ export default function DashboardScreen({ navigation }: any) {
     useShadowColorFromDataset: false,
   };
 
-  const displayName = user?.name ? user.name : 'Charity';
+  const greeting = getTimeBasedGreeting();
+  const displayName = extractFirstName(user?.name || user?.email || 'Charity');
   const initial = displayName.charAt(0).toUpperCase();
 
   return (
@@ -555,7 +556,7 @@ export default function DashboardScreen({ navigation }: any) {
             <Text style={styles.avatarInitial}>{initial}</Text>
           </View>
           <View>
-            <Text style={[styles.headerSubtitle, { color: theme.textSecondary }]}>Welcome Back,</Text>
+            <Text style={[styles.headerSubtitle, { color: theme.textSecondary }]}>{greeting},</Text>
             <View style={styles.headerNameRow}>
               <Text style={[styles.title, { color: theme.text }]}>{displayName} 👋</Text>
               <Ionicons name="chevron-down" size={14} color={theme.textSecondary} />

@@ -1,5 +1,5 @@
 import React, { createContext, useState, useContext, ReactNode, useEffect } from 'react';
-import { useColorScheme as useRNColorScheme } from 'react-native';
+import { Appearance, ColorSchemeName, useColorScheme as useRNColorScheme } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { light, dark, ThemeColors } from '../theme';
 
@@ -16,9 +16,40 @@ const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
 const THEME_STORAGE_KEY = '@app_theme_mode';
 
 export const ThemeProvider = ({ children }: { children: ReactNode }) => {
-  const systemScheme = useRNColorScheme();
+  const hookScheme = useRNColorScheme();
+  const [systemScheme, setSystemScheme] = useState<ColorSchemeName>(
+    Appearance.getColorScheme() || hookScheme || 'light'
+  );
   const [themeMode, setThemeModeState] = useState<ThemeMode>('system');
 
+  // Actively track device Appearance changes
+  useEffect(() => {
+    const current = Appearance.getColorScheme();
+    if (current) {
+      setSystemScheme(current);
+    }
+
+    const subscription = Appearance.addChangeListener(({ colorScheme }) => {
+      if (colorScheme) {
+        setSystemScheme(colorScheme);
+      }
+    });
+
+    return () => {
+      if (subscription && typeof subscription.remove === 'function') {
+        subscription.remove();
+      }
+    };
+  }, []);
+
+  // Update when React Native hook changes
+  useEffect(() => {
+    if (hookScheme) {
+      setSystemScheme(hookScheme);
+    }
+  }, [hookScheme]);
+
+  // Restore stored preference
   useEffect(() => {
     const loadTheme = async () => {
       try {
@@ -42,7 +73,8 @@ export const ThemeProvider = ({ children }: { children: ReactNode }) => {
     }
   };
 
-  const isDark = themeMode === 'system' ? systemScheme === 'dark' : themeMode === 'dark';
+  const activeSystem = systemScheme || hookScheme || Appearance.getColorScheme() || 'light';
+  const isDark = themeMode === 'system' ? activeSystem === 'dark' : themeMode === 'dark';
   const theme = isDark ? dark : light;
 
   return (
@@ -55,7 +87,7 @@ export const ThemeProvider = ({ children }: { children: ReactNode }) => {
 export const useTheme = () => {
   const context = useContext(ThemeContext);
   if (!context) {
-    const systemScheme = useRNColorScheme();
+    const systemScheme = Appearance.getColorScheme() || 'light';
     const isDark = systemScheme === 'dark';
     return {
       themeMode: 'system' as ThemeMode,

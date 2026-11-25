@@ -10,7 +10,7 @@ import {
   ScrollView,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useAuth } from '../context/AuthContext';
+import { useAuth, extractFirstName, getTimeBasedGreeting } from '../context/AuthContext';
 import { useThemeColors } from '../theme';
 
 export default function LoginScreen({ navigation }: any) {
@@ -46,7 +46,7 @@ export default function LoginScreen({ navigation }: any) {
         {/* Login Card */}
         <View style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border }]}>
           <Text style={[styles.cardTitle, { color: theme.text }]}>
-            {user?.name ? `Welcome Back, ${user.name}!` : 'Welcome Back'}
+            {`${getTimeBasedGreeting()}, ${extractFirstName(user?.name || email)}!`}
           </Text>
           <Text style={[styles.cardSubtitle, { color: theme.textSecondary }]}>
             Sign in to track your expenses and monthly budgets
