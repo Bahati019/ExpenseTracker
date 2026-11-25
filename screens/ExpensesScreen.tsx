@@ -2,7 +2,7 @@ import React, { useState, useMemo } from 'react';
 import {
   View,
   Text,
-  FlatList,
+  SectionList,
   StyleSheet,
   Platform,
   TouchableOpacity,
@@ -11,6 +11,7 @@ import {
   TextInput,
   ScrollView,
   KeyboardAvoidingView,
+  Share,
 } from 'react-native';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { useExpenses, Expense } from '../context/ExpenseContext';
@@ -22,6 +23,12 @@ import {
   formatCurrency,
 } from '../theme';
 
+interface ExpenseSection {
+  title: string;
+  formattedSubtotal: string;
+  data: Expense[];
+}
+
 export default function ExpensesScreen() {
   const { expenses, updateExpense, removeExpense } = useExpenses();
   const theme = useThemeColors();
@@ -29,6 +36,9 @@ export default function ExpensesScreen() {
   // Search & Filter state
   const [searchQuery, setSearchQuery] = useState('');
   const [filterCategory, setFilterCategory] = useState('');
+
+  // Digital Receipt Modal State
+  const [viewingReceipt, setViewingReceipt] = useState<Expense | null>(null);
 
   // Edit Modal State
   const [editingExpense, setEditingExpense] = useState<Expense | null>(null);
@@ -52,6 +62,57 @@ export default function ExpensesScreen() {
     });
   }, [expenses, filterCategory, searchQuery]);
 
+  // Group filtered expenses into Timeline Sections (Today, Yesterday, or specific dates with subtotals)
+  const sections = useMemo((): ExpenseSection[] => {
+    const groups: Record<string, { date: Date; items: Expense[] }> = {};
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    const yesterday = new Date(today);
+    yesterday.setDate(yesterday.getDate() - 1);
+
+    filteredExpenses.forEach((exp) => {
+      const expDate = new Date(exp.date);
+      const dateKey = `${expDate.getFullYear()}-${expDate.getMonth()}-${expDate.getDate()}`;
+      if (!groups[dateKey]) {
+        groups[dateKey] = { date: expDate, items: [] };
+      }
+      groups[dateKey].items.push(exp);
+    });
+
+    const sortedKeys = Object.keys(groups).sort((a, b) => {
+      return groups[b].date.getTime() - groups[a].date.getTime();
+    });
+
+    return sortedKeys.map((key) => {
+      const group = groups[key];
+      const groupDate = new Date(group.date);
+      groupDate.setHours(0, 0, 0, 0);
+
+      let title = '';
+      if (groupDate.getTime() === today.getTime()) {
+        title = 'Today';
+      } else if (groupDate.getTime() === yesterday.getTime()) {
+        title = 'Yesterday';
+      } else {
+        title = group.date.toLocaleDateString('en-US', {
+          weekday: 'short',
+          month: 'short',
+          day: 'numeric',
+          year: group.date.getFullYear() !== today.getFullYear() ? 'numeric' : undefined,
+        });
+      }
+
+      const subtotal = group.items.reduce((sum, item) => sum + item.amount, 0);
+
+      return {
+        title,
+        formattedSubtotal: formatCurrency(subtotal),
+        data: group.items.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()),
+      };
+    });
+  }, [filteredExpenses]);
+
   // Aggregate total for filtered list
   const filteredTotal = useMemo(() => {
     return filteredExpenses.reduce((sum, e) => sum + e.amount, 0);
@@ -68,6 +129,7 @@ export default function ExpensesScreen() {
   }, [expenses]);
 
   const handleOpenEdit = (expense: Expense) => {
+    setViewingReceipt(null);
     setEditingExpense(expense);
     setEditDescription(expense.description);
     setEditAmount(expense.amount.toString());
@@ -108,9 +170,26 @@ export default function ExpensesScreen() {
       'Are you sure you want to delete this expense record?',
       [
         { text: 'Cancel', style: 'cancel' },
-        { text: 'Delete', style: 'destructive', onPress: () => removeExpense(id) },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: () => {
+            removeExpense(id);
+            setViewingReceipt(null);
+          },
+        },
       ]
     );
+  };
+
+  const handleShareReceipt = async (item: Expense) => {
+    try {
+      const code = item.id.startsWith('MPESA_') ? item.id.replace('MPESA_', '') : item.id;
+      const text = `Expense Receipt:\n${item.description}\nAmount: ${formatCurrency(item.amount)}\nCategory: ${item.category}\nDate: ${new Date(item.date).toLocaleString()}\nReceipt Ref: ${code}`;
+      await Share.share({ message: text });
+    } catch {
+      // ignore
+    }
   };
 
   return (
@@ -132,7 +211,7 @@ export default function ExpensesScreen() {
         <View style={[styles.searchBar, { backgroundColor: theme.inputBackground, borderColor: theme.border }]}>
           <Ionicons name="search-outline" size={18} color={theme.textSecondary} />
           <TextInput
-            placeholder="Search by name, category, or M-Pesa ID..."
+            placeholder="Search by merchant, category, or code..."
             placeholderTextColor={theme.textTertiary}
             value={searchQuery}
             onChangeText={setSearchQuery}
@@ -219,12 +298,13 @@ export default function ExpensesScreen() {
         </Text>
       </View>
 
-      {/* Expenses List */}
-      <FlatList
-        data={filteredExpenses}
+      {/* Timeline Grouped Expenses SectionList */}
+      <SectionList
+        sections={sections}
         keyExtractor={(item) => item.id}
         contentContainerStyle={styles.expenseListContent}
         showsVerticalScrollIndicator={false}
+        stickySectionHeadersEnabled={false}
         ListEmptyComponent={
           <View style={styles.emptyContainer}>
             <View style={[styles.emptyIconBg, { backgroundColor: theme.inputBackground }]}>
@@ -249,16 +329,26 @@ export default function ExpensesScreen() {
             )}
           </View>
         }
+        renderSectionHeader={({ section: { title, formattedSubtotal } }) => (
+          <View style={styles.sectionHeaderRow}>
+            <Text style={[styles.sectionDateTitle, { color: theme.text }]}>{title}</Text>
+            <Text style={[styles.sectionSubtotal, { color: theme.textSecondary }]}>
+              {formattedSubtotal}
+            </Text>
+          </View>
+        )}
         renderItem={({ item }) => {
           const meta = getCategoryMeta(item.category);
           const isMpesa = item.id.startsWith('MPESA_');
 
           return (
-            <View
+            <TouchableOpacity
               style={[
                 styles.expenseItem,
                 { backgroundColor: theme.card, borderColor: theme.border },
               ]}
+              onPress={() => setViewingReceipt(item)}
+              activeOpacity={0.7}
             >
               {/* Category Icon Badge */}
               <View style={[styles.categoryIconCircle, { backgroundColor: meta.lightBg }]}>
@@ -266,11 +356,7 @@ export default function ExpensesScreen() {
               </View>
 
               {/* Middle details */}
-              <TouchableOpacity
-                style={styles.expenseMiddle}
-                onPress={() => handleOpenEdit(item)}
-                activeOpacity={0.7}
-              >
+              <View style={styles.expenseMiddle}>
                 <Text style={[styles.expenseTitle, { color: theme.text }]} numberOfLines={1}>
                   {item.description}
                 </Text>
@@ -281,10 +367,9 @@ export default function ExpensesScreen() {
                   </View>
 
                   <Text style={[styles.expenseDate, { color: theme.textSecondary }]}>
-                    {new Date(item.date).toLocaleDateString('en-US', {
-                      month: 'short',
-                      day: 'numeric',
-                      year: 'numeric',
+                    {new Date(item.date).toLocaleTimeString('en-US', {
+                      hour: '2-digit',
+                      minute: '2-digit',
                     })}
                   </Text>
 
@@ -294,36 +379,144 @@ export default function ExpensesScreen() {
                     </View>
                   )}
                 </View>
-              </TouchableOpacity>
+              </View>
 
-              {/* Right side amount & quick actions */}
+              {/* Right side amount & chevron */}
               <View style={styles.expenseRight}>
                 <Text style={[styles.expenseAmount, { color: theme.text }]}>
                   {formatCurrency(item.amount)}
                 </Text>
-
-                <View style={styles.actionButtons}>
-                  <TouchableOpacity
-                    onPress={() => handleOpenEdit(item)}
-                    style={[styles.actionBtn, { backgroundColor: theme.inputBackground }]}
-                    accessibilityLabel="Edit"
-                  >
-                    <Ionicons name="pencil-outline" size={14} color={theme.text} />
-                  </TouchableOpacity>
-
-                  <TouchableOpacity
-                    onPress={() => handleDelete(item.id)}
-                    style={[styles.actionBtn, { backgroundColor: theme.dangerBg }]}
-                    accessibilityLabel="Delete"
-                  >
-                    <Ionicons name="trash-outline" size={14} color={theme.danger} />
-                  </TouchableOpacity>
-                </View>
+                <Ionicons name="chevron-forward" size={14} color={theme.textTertiary} />
               </View>
-            </View>
+            </TouchableOpacity>
           );
         }}
       />
+
+      {/* Digital Receipt Modal Sheet */}
+      <Modal
+        visible={viewingReceipt !== null}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={() => setViewingReceipt(null)}
+      >
+        <TouchableOpacity
+          style={styles.modalOverlay}
+          activeOpacity={1}
+          onPress={() => setViewingReceipt(null)}
+        >
+          {viewingReceipt && (
+            <View
+              style={[styles.modalContent, { backgroundColor: theme.card, borderColor: theme.border }]}
+              onStartShouldSetResponder={() => true}
+            >
+              {/* Receipt Header Badge */}
+              <View style={styles.receiptTopIconCircle}>
+                <View style={[styles.receiptSuccessIcon, { backgroundColor: theme.successBg }]}>
+                  <Ionicons name="checkmark-circle" size={32} color={theme.success} />
+                </View>
+              </View>
+
+              <Text style={[styles.receiptHeaderTitle, { color: theme.textSecondary }]}>
+                Transaction Receipt
+              </Text>
+
+              {/* Amount Display */}
+              <Text style={[styles.receiptAmount, { color: theme.text }]}>
+                {formatCurrency(viewingReceipt.amount)}
+              </Text>
+
+              {/* Merchant / Description */}
+              <Text style={[styles.receiptMerchant, { color: theme.text }]} numberOfLines={2}>
+                {viewingReceipt.description}
+              </Text>
+
+              {/* Perforated / Dashed Separator */}
+              <View style={[styles.receiptDivider, { borderBottomColor: theme.borderLight }]} />
+
+              {/* Receipt Details Box */}
+              <View style={[styles.receiptDetailsBox, { backgroundColor: theme.inputBackground }]}>
+                {/* Category */}
+                <View style={styles.receiptDetailRow}>
+                  <Text style={[styles.receiptDetailLabel, { color: theme.textSecondary }]}>
+                    Category
+                  </Text>
+                  <View style={styles.receiptCategoryGroup}>
+                    <Ionicons
+                      name={getCategoryMeta(viewingReceipt.category).icon as any}
+                      size={15}
+                      color={getCategoryMeta(viewingReceipt.category).color}
+                    />
+                    <Text style={[styles.receiptDetailValue, { color: theme.text }]}>
+                      {viewingReceipt.category || 'Others'}
+                    </Text>
+                  </View>
+                </View>
+
+                {/* Date & Time */}
+                <View style={styles.receiptDetailRow}>
+                  <Text style={[styles.receiptDetailLabel, { color: theme.textSecondary }]}>
+                    Date & Time
+                  </Text>
+                  <Text style={[styles.receiptDetailValue, { color: theme.text }]}>
+                    {new Date(viewingReceipt.date).toLocaleString('en-US', {
+                      dateStyle: 'medium',
+                      timeStyle: 'short',
+                    })}
+                  </Text>
+                </View>
+
+                {/* M-Pesa Reference ID */}
+                <View style={styles.receiptDetailRow}>
+                  <Text style={[styles.receiptDetailLabel, { color: theme.textSecondary }]}>
+                    Reference Ref
+                  </Text>
+                  <Text style={[styles.receiptRefCode, { color: theme.primary }]}>
+                    {viewingReceipt.id.startsWith('MPESA_')
+                      ? viewingReceipt.id.replace('MPESA_', '')
+                      : viewingReceipt.id}
+                  </Text>
+                </View>
+              </View>
+
+              {/* Action Buttons on Receipt */}
+              <View style={styles.receiptActionRow}>
+                <TouchableOpacity
+                  style={[styles.receiptSecondaryBtn, { backgroundColor: theme.inputBackground }]}
+                  onPress={() => handleShareReceipt(viewingReceipt)}
+                >
+                  <Ionicons name="share-social-outline" size={16} color={theme.text} />
+                  <Text style={[styles.receiptBtnText, { color: theme.text }]}>Share</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={[styles.receiptSecondaryBtn, { backgroundColor: theme.inputBackground }]}
+                  onPress={() => handleOpenEdit(viewingReceipt)}
+                >
+                  <Ionicons name="pencil-outline" size={16} color={theme.text} />
+                  <Text style={[styles.receiptBtnText, { color: theme.text }]}>Edit</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={[styles.receiptSecondaryBtn, { backgroundColor: theme.dangerBg }]}
+                  onPress={() => handleDelete(viewingReceipt.id)}
+                >
+                  <Ionicons name="trash-outline" size={16} color={theme.danger} />
+                  <Text style={[styles.receiptBtnText, { color: theme.danger }]}>Delete</Text>
+                </TouchableOpacity>
+              </View>
+
+              {/* Close Button */}
+              <TouchableOpacity
+                style={[styles.receiptCloseBtn, { backgroundColor: theme.primary }]}
+                onPress={() => setViewingReceipt(null)}
+              >
+                <Text style={styles.receiptCloseBtnText}>Done</Text>
+              </TouchableOpacity>
+            </View>
+          )}
+        </TouchableOpacity>
+      </Modal>
 
       {/* Edit Expense Bottom Sheet Modal */}
       <Modal
@@ -556,13 +749,30 @@ const styles = StyleSheet.create({
     padding: 16,
     paddingBottom: 40,
   },
+  sectionHeaderRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 10,
+    paddingHorizontal: 4,
+  },
+  sectionDateTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  sectionSubtotal: {
+    fontSize: 13,
+    fontWeight: '600',
+  },
   expenseItem: {
     flexDirection: 'row',
     alignItems: 'center',
     borderRadius: 16,
     borderWidth: 1,
     padding: 14,
-    marginBottom: 12,
+    marginBottom: 10,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.04,
@@ -613,25 +823,14 @@ const styles = StyleSheet.create({
     fontWeight: '800',
   },
   expenseRight: {
-    alignItems: 'flex-end',
-    gap: 6,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
     marginLeft: 8,
   },
   expenseAmount: {
     fontSize: 15,
     fontWeight: '800',
-  },
-  actionButtons: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  actionBtn: {
-    width: 28,
-    height: 28,
-    borderRadius: 8,
-    justifyContent: 'center',
-    alignItems: 'center',
   },
   emptyContainer: {
     alignItems: 'center',
@@ -695,6 +894,101 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  receiptTopIconCircle: {
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  receiptSuccessIcon: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  receiptHeaderTitle: {
+    fontSize: 13,
+    fontWeight: '600',
+    textAlign: 'center',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    marginBottom: 6,
+  },
+  receiptAmount: {
+    fontSize: 32,
+    fontWeight: '900',
+    textAlign: 'center',
+    marginBottom: 6,
+    letterSpacing: -0.5,
+  },
+  receiptMerchant: {
+    fontSize: 16,
+    fontWeight: '600',
+    textAlign: 'center',
+    marginBottom: 16,
+    paddingHorizontal: 12,
+  },
+  receiptDivider: {
+    borderBottomWidth: 1,
+    borderStyle: 'dashed',
+    marginBottom: 16,
+  },
+  receiptDetailsBox: {
+    borderRadius: 16,
+    padding: 16,
+    gap: 12,
+    marginBottom: 18,
+  },
+  receiptDetailRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  receiptDetailLabel: {
+    fontSize: 13,
+  },
+  receiptCategoryGroup: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  receiptDetailValue: {
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  receiptRefCode: {
+    fontSize: 13,
+    fontWeight: '800',
+    fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
+  },
+  receiptActionRow: {
+    flexDirection: 'row',
+    gap: 10,
+    marginBottom: 14,
+  },
+  receiptSecondaryBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingVertical: 12,
+    borderRadius: 12,
+  },
+  receiptBtnText: {
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  receiptCloseBtn: {
+    paddingVertical: 14,
+    borderRadius: 14,
+    alignItems: 'center',
+    marginBottom: 10,
+  },
+  receiptCloseBtnText: {
+    color: '#FFFFFF',
+    fontSize: 15,
+    fontWeight: '700',
   },
   inputLabel: {
     fontSize: 12,

@@ -14,6 +14,7 @@ import {
   ActivityIndicator,
   NativeModules,
   Modal,
+  Share,
 } from 'react-native';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { PieChart } from 'react-native-chart-kit';
@@ -25,8 +26,8 @@ import SmsAndroid from 'react-native-get-sms-android';
 
 import { useAuth } from '../context/AuthContext';
 import { useExpenses, Expense } from '../context/ExpenseContext';
+import { useTheme, ThemeMode } from '../context/ThemeContext';
 import {
-  useThemeColors,
   CATEGORIES,
   getCategoryMeta,
   formatCurrency,
@@ -35,13 +36,32 @@ import { parseMPesaSMS } from '../utils/mpesaParser';
 
 const screenWidth = Dimensions.get('window').width;
 
-export default function DashboardScreen({ navigation }: any) {
-  const { logout } = useAuth();
-  const { addExpense, addExpenses, expenses } = useExpenses();
-  const theme = useThemeColors();
+const MONTH_NAMES = [
+  'January',
+  'February',
+  'March',
+  'April',
+  'May',
+  'June',
+  'July',
+  'August',
+  'September',
+  'October',
+  'November',
+  'December',
+];
 
-  // Add Expense Modal state
+export default function DashboardScreen({ navigation }: any) {
+  const { logout, user } = useAuth();
+  const { addExpense, addExpenses, expenses, budgets } = useExpenses();
+  const { theme, themeMode, setThemeMode, isDark } = useTheme();
+
+  // Modals state
   const [modalVisible, setModalVisible] = useState(false);
+  const [profileModalVisible, setProfileModalVisible] = useState(false);
+  const [monthPickerVisible, setMonthPickerVisible] = useState(false);
+
+  // Add Expense form state
   const [description, setDescription] = useState('');
   const [amount, setAmount] = useState('');
   const [category, setCategory] = useState(CATEGORIES[0].name);
@@ -49,25 +69,102 @@ export default function DashboardScreen({ navigation }: any) {
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
 
-  // Timeframe filter for dashboard stats: 'month' | 'all'
-  const [timeframe, setTimeframe] = useState<'month' | 'all'>('month');
-
-  // Filter expenses based on timeframe
-  const filteredExpenses = useMemo(() => {
-    if (timeframe === 'all') return expenses;
+  // Month selection state: defaults to current month & current year
+  const [selectedDate, setSelectedDate] = useState<{ month: number; year: number }>(() => {
     const now = new Date();
-    const currentYear = now.getFullYear();
-    const currentMonth = now.getMonth();
+    return { month: now.getMonth(), year: now.getFullYear() };
+  });
+
+  const now = new Date();
+  const isCurrentMonth =
+    selectedDate.month === now.getMonth() && selectedDate.year === now.getFullYear();
+
+  const selectedMonthLabel = `${MONTH_NAMES[selectedDate.month]} ${selectedDate.year}`;
+
+  const goToPreviousMonth = () => {
+    setSelectedDate((prev) => {
+      if (prev.month === 0) {
+        return { month: 11, year: prev.year - 1 };
+      }
+      return { month: prev.month - 1, year: prev.year };
+    });
+  };
+
+  const goToNextMonth = () => {
+    setSelectedDate((prev) => {
+      if (prev.month === 11) {
+        return { month: 0, year: prev.year + 1 };
+      }
+      return { month: prev.month + 1, year: prev.year };
+    });
+  };
+
+  const resetToCurrentMonth = () => {
+    setSelectedDate({ month: now.getMonth(), year: now.getFullYear() });
+  };
+
+  // Generate list of available selectable months with counts and totals
+  const availableMonths = useMemo(() => {
+    const map = new Map<string, { month: number; year: number; count: number; total: number }>();
+
+    // Always include current month
+    const curKey = `${now.getFullYear()}-${now.getMonth()}`;
+    map.set(curKey, {
+      month: now.getMonth(),
+      year: now.getFullYear(),
+      count: 0,
+      total: 0,
+    });
+
+    // Include previous 5 months by default
+    for (let i = 1; i <= 5; i++) {
+      const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+      const k = `${d.getFullYear()}-${d.getMonth()}`;
+      if (!map.has(k)) {
+        map.set(k, { month: d.getMonth(), year: d.getFullYear(), count: 0, total: 0 });
+      }
+    }
+
+    // Populate data from all recorded expenses
+    expenses.forEach((e) => {
+      const d = new Date(e.date);
+      const k = `${d.getFullYear()}-${d.getMonth()}`;
+      const existing = map.get(k) || {
+        month: d.getMonth(),
+        year: d.getFullYear(),
+        count: 0,
+        total: 0,
+      };
+      existing.count += 1;
+      existing.total += e.amount;
+      map.set(k, existing);
+    });
+
+    return Array.from(map.values()).sort((a, b) => {
+      if (a.year !== b.year) return b.year - a.year;
+      return b.month - a.month;
+    });
+  }, [expenses]);
+
+  // Filter expenses strictly for the selected month and year
+  const filteredExpenses = useMemo(() => {
     return expenses.filter((e) => {
       const expDate = new Date(e.date);
-      return expDate.getFullYear() === currentYear && expDate.getMonth() === currentMonth;
+      return (
+        expDate.getFullYear() === selectedDate.year && expDate.getMonth() === selectedDate.month
+      );
     });
-  }, [expenses, timeframe]);
+  }, [expenses, selectedDate]);
 
-  // Aggregate stats
+  // Aggregate monthly stats
   const totalExpenses = useMemo(() => {
     return filteredExpenses.reduce((sum, exp) => sum + exp.amount, 0);
   }, [filteredExpenses]);
+
+  // Lifetime expenses total
+  const lifetimeTotal = useMemo(() => {
+    return expenses.reduce((sum, exp) => sum + exp.amount, 0);
+  }, [expenses]);
 
   const categoryTotals = useMemo(() => {
     return filteredExpenses.reduce((acc, exp) => {
@@ -89,7 +186,79 @@ export default function DashboardScreen({ navigation }: any) {
     return { name: topCat, amount: max };
   }, [categoryTotals]);
 
-  // Pie chart data
+  // Top category percentage breakdown list
+  const categoryBreakdownList = useMemo(() => {
+    return Object.entries(categoryTotals)
+      .map(([cat, amount]) => {
+        const meta = getCategoryMeta(cat);
+        const percent = totalExpenses > 0 ? Math.round((amount / totalExpenses) * 100) : 0;
+        return {
+          name: cat,
+          amount,
+          percent,
+          color: meta.color,
+          icon: meta.icon,
+          lightBg: meta.lightBg,
+        };
+      })
+      .sort((a, b) => b.amount - a.amount);
+  }, [categoryTotals, totalExpenses]);
+
+  // Smart Contextual Insight generator
+  const smartInsight = useMemo(() => {
+    if (filteredExpenses.length === 0) {
+      return {
+        icon: 'sparkles',
+        title: 'Fresh Start',
+        message: `No spending recorded yet for ${selectedMonthLabel}. Ready to log your first expense?`,
+        type: 'info',
+      };
+    }
+
+    // Check if any category has exceeded budget
+    for (const [cat, limit] of Object.entries(budgets)) {
+      if (limit > 0 && (categoryTotals[cat] || 0) >= limit) {
+        return {
+          icon: 'alert-circle',
+          title: 'Budget Alert',
+          message: `You've exceeded your ${cat} budget of ${formatCurrency(limit)} for this month.`,
+          type: 'danger',
+        };
+      }
+    }
+
+    // Check if near limit
+    for (const [cat, limit] of Object.entries(budgets)) {
+      if (limit > 0 && (categoryTotals[cat] || 0) >= limit * 0.8) {
+        return {
+          icon: 'warning',
+          title: 'Nearing Budget Limit',
+          message: `${cat} spending is at ${Math.round(((categoryTotals[cat] || 0) / limit) * 100)}% of your monthly target.`,
+          type: 'warning',
+        };
+      }
+    }
+
+    // Top category insight
+    if (topCategory.amount > 0 && totalExpenses > 0) {
+      const pct = Math.round((topCategory.amount / totalExpenses) * 100);
+      return {
+        icon: 'bulb',
+        title: 'Spending Pattern',
+        message: `${topCategory.name} is your biggest expense at ${pct}% of your ${selectedMonthLabel} spending.`,
+        type: 'success',
+      };
+    }
+
+    return {
+      icon: 'checkmark-circle',
+      title: 'Looking Good',
+      message: `You have ${filteredExpenses.length} transactions totaling ${formatCurrency(totalExpenses)} this month.`,
+      type: 'info',
+    };
+  }, [filteredExpenses, selectedMonthLabel, budgets, categoryTotals, topCategory, totalExpenses]);
+
+  // Monthly Pie chart data
   const pieChartData = useMemo(() => {
     return Object.keys(categoryTotals).map((cat) => {
       const meta = getCategoryMeta(cat);
@@ -103,12 +272,30 @@ export default function DashboardScreen({ navigation }: any) {
     });
   }, [categoryTotals, theme.textSecondary]);
 
-  // Recent 4 transactions
+  // Recent 5 transactions for the selected month
   const recentExpenses = useMemo(() => {
-    return [...expenses]
+    return [...filteredExpenses]
       .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
-      .slice(0, 4);
-  }, [expenses]);
+      .slice(0, 5);
+  }, [filteredExpenses]);
+
+  // Export to CSV helper
+  const handleExportCSV = async () => {
+    try {
+      const headers = 'ID,Date,Description,Category,Amount(KES)\n';
+      const rows = expenses
+        .map((e) => `"${e.id}","${new Date(e.date).toISOString().substring(0, 10)}","${e.description.replace(/"/g, '""')}","${e.category}",${e.amount.toFixed(2)}`)
+        .join('\n');
+      const csvData = headers + rows;
+
+      await Share.share({
+        message: csvData,
+        title: 'Expense_Tracker_Export.csv',
+      });
+    } catch (err: any) {
+      Alert.alert('Export', 'CSV data generated:\n' + expenses.length + ' expenses exported.');
+    }
+  };
 
   // Sync past M-Pesa SMS from device inbox
   const syncMpesaSms = useCallback(
@@ -233,7 +420,7 @@ export default function DashboardScreen({ navigation }: any) {
     [expenses, addExpenses]
   );
 
-  // Request SMS Permission, auto-sync and start live listener
+  // Auto-sync & SMS Listener setup
   useEffect(() => {
     async function setupPermissionsAndListener() {
       if (Platform.OS === 'android') {
@@ -352,21 +539,45 @@ export default function DashboardScreen({ navigation }: any) {
     useShadowColorFromDataset: false,
   };
 
+  const displayName = user?.name ? user.name : 'Charity';
+  const initial = displayName.charAt(0).toUpperCase();
+
   return (
     <View style={[styles.container, { backgroundColor: theme.background }]}>
-      {/* Top Header */}
+      {/* Top Header with Profile Avatar & Action Icons */}
       <View style={[styles.header, { backgroundColor: theme.card, borderBottomColor: theme.border }]}>
-        <View style={styles.headerBrand}>
-          <View style={[styles.brandIcon, { backgroundColor: theme.primaryLight }]}>
-            <Ionicons name="wallet" size={20} color={theme.primary} />
+        <TouchableOpacity
+          style={styles.headerBrand}
+          onPress={() => setProfileModalVisible(true)}
+          activeOpacity={0.7}
+        >
+          <View style={[styles.avatarCircle, { backgroundColor: theme.primary }]}>
+            <Text style={styles.avatarInitial}>{initial}</Text>
           </View>
           <View>
-            <Text style={[styles.headerSubtitle, { color: theme.textSecondary }]}>Welcome Back</Text>
-            <Text style={[styles.title, { color: theme.text }]}>Dashboard</Text>
+            <Text style={[styles.headerSubtitle, { color: theme.textSecondary }]}>Welcome Back,</Text>
+            <View style={styles.headerNameRow}>
+              <Text style={[styles.title, { color: theme.text }]}>{displayName} 👋</Text>
+              <Ionicons name="chevron-down" size={14} color={theme.textSecondary} />
+            </View>
           </View>
-        </View>
+        </TouchableOpacity>
 
         <View style={styles.headerRight}>
+          {/* Quick Theme Toggle */}
+          <TouchableOpacity
+            onPress={() => setThemeMode(isDark ? 'light' : 'dark')}
+            style={[styles.headerIconButton, { backgroundColor: theme.inputBackground }]}
+            accessibilityLabel="Toggle Theme"
+          >
+            <Ionicons
+              name={isDark ? 'sunny' : 'moon'}
+              size={18}
+              color={isDark ? '#FBBF24' : theme.text}
+            />
+          </TouchableOpacity>
+
+          {/* Quick Sync SMS */}
           <TouchableOpacity
             onPress={() => syncMpesaSms(false)}
             disabled={isSyncing}
@@ -380,63 +591,74 @@ export default function DashboardScreen({ navigation }: any) {
             )}
           </TouchableOpacity>
 
+          {/* Settings Button */}
           <TouchableOpacity
-            onPress={logout}
-            style={[styles.headerIconButton, { backgroundColor: theme.dangerBg }]}
-            accessibilityLabel="Logout"
+            onPress={() => setProfileModalVisible(true)}
+            style={[styles.headerIconButton, { backgroundColor: theme.inputBackground }]}
+            accessibilityLabel="Settings"
           >
-            <Ionicons name="log-out-outline" size={18} color={theme.danger} />
+            <Ionicons name="settings-outline" size={18} color={theme.text} />
           </TouchableOpacity>
         </View>
       </View>
 
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-        {/* Hero Card: Financial Balance */}
+        {/* Hero Card: Financial Balance for Selected Month */}
         <View style={[styles.heroCard, { backgroundColor: theme.card, borderColor: theme.border }]}>
-          <View style={styles.heroHeader}>
-            <View>
-              <Text style={[styles.heroSubtitle, { color: theme.textSecondary }]}>Total Expenses</Text>
-              <Text style={[styles.heroTotal, { color: theme.text }]}>{formatCurrency(totalExpenses)}</Text>
-            </View>
+          {/* Month Selector Bar */}
+          <View style={[styles.monthNavigatorRow, { backgroundColor: theme.inputBackground }]}>
+            <TouchableOpacity
+              onPress={goToPreviousMonth}
+              style={styles.monthNavBtn}
+              accessibilityLabel="Previous Month"
+            >
+              <Ionicons name="chevron-back" size={18} color={theme.text} />
+            </TouchableOpacity>
 
-            {/* Timeframe Pill Selector */}
-            <View style={[styles.timeframePill, { backgroundColor: theme.inputBackground }]}>
-              <TouchableOpacity
-                onPress={() => setTimeframe('month')}
-                style={[
-                  styles.timeframeOption,
-                  timeframe === 'month' && [styles.timeframeOptionActive, { backgroundColor: theme.card }],
-                ]}
-              >
-                <Text
-                  style={[
-                    styles.timeframeText,
-                    { color: timeframe === 'month' ? theme.primary : theme.textSecondary },
-                  ]}
-                >
-                  This Month
-                </Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                onPress={() => setTimeframe('all')}
-                style={[
-                  styles.timeframeOption,
-                  timeframe === 'all' && [styles.timeframeOptionActive, { backgroundColor: theme.card }],
-                ]}
-              >
-                <Text
-                  style={[
-                    styles.timeframeText,
-                    { color: timeframe === 'all' ? theme.primary : theme.textSecondary },
-                  ]}
-                >
-                  All Time
-                </Text>
-              </TouchableOpacity>
-            </View>
+            <TouchableOpacity
+              onPress={() => setMonthPickerVisible(true)}
+              style={styles.monthSelectorPill}
+              activeOpacity={0.7}
+            >
+              <Ionicons name="calendar-outline" size={15} color={theme.primary} />
+              <Text style={[styles.monthSelectorText, { color: theme.text }]}>
+                {selectedMonthLabel}
+              </Text>
+              <Ionicons name="chevron-down" size={14} color={theme.textSecondary} />
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              onPress={goToNextMonth}
+              style={styles.monthNavBtn}
+              accessibilityLabel="Next Month"
+            >
+              <Ionicons name="chevron-forward" size={18} color={theme.text} />
+            </TouchableOpacity>
           </View>
 
-          {/* Quick Metrics Bar */}
+          {/* Balance & Month Heading */}
+          <View style={styles.heroHeader}>
+            <View>
+              <Text style={[styles.heroSubtitle, { color: theme.textSecondary }]}>
+                {isCurrentMonth ? 'This Month Spent' : `${MONTH_NAMES[selectedDate.month]} Spend`}
+              </Text>
+              <Text style={[styles.heroTotal, { color: theme.text }]}>
+                {formatCurrency(totalExpenses)}
+              </Text>
+            </View>
+
+            {!isCurrentMonth && (
+              <TouchableOpacity
+                onPress={resetToCurrentMonth}
+                style={[styles.todayJumpBadge, { backgroundColor: theme.primaryLight }]}
+              >
+                <Ionicons name="return-up-back" size={12} color={theme.primary} />
+                <Text style={[styles.todayJumpText, { color: theme.primary }]}>This Month</Text>
+              </TouchableOpacity>
+            )}
+          </View>
+
+          {/* Quick Metrics Bar for Selected Month */}
           <View style={[styles.metricsRow, { borderTopColor: theme.borderLight }]}>
             <View style={styles.metricItem}>
               <Text style={[styles.metricLabel, { color: theme.textSecondary }]}>Transactions</Text>
@@ -464,32 +686,116 @@ export default function DashboardScreen({ navigation }: any) {
             </View>
           </View>
 
-          {/* Category Pie Chart */}
+          {/* Category Pie Chart & Breakdown Bars for Selected Month */}
           {filteredExpenses.length > 0 ? (
             <View style={styles.chartContainer}>
-              <Text style={[styles.chartTitle, { color: theme.textSecondary }]}>Spending by Category</Text>
+              <Text style={[styles.chartTitle, { color: theme.textSecondary }]}>
+                Spending by Category ({MONTH_NAMES[selectedDate.month]})
+              </Text>
               <PieChart
                 data={pieChartData}
                 width={screenWidth - 56}
-                height={170}
+                height={165}
                 chartConfig={chartConfig}
                 accessor={'population'}
                 backgroundColor={'transparent'}
                 paddingLeft={'15'}
                 absolute
               />
+
+              {/* Compact Category Allocation Bars */}
+              <View style={styles.allocationBarsContainer}>
+                {categoryBreakdownList.slice(0, 3).map((item) => (
+                  <View key={item.name} style={styles.allocationRow}>
+                    <View style={styles.allocationHeader}>
+                      <View style={styles.allocationTitleGroup}>
+                        <View style={[styles.allocationDot, { backgroundColor: item.color }]} />
+                        <Text style={[styles.allocationName, { color: theme.text }]}>
+                          {item.name}
+                        </Text>
+                      </View>
+                      <Text style={[styles.allocationAmount, { color: theme.textSecondary }]}>
+                        {formatCurrency(item.amount)} ({item.percent}%)
+                      </Text>
+                    </View>
+                    <View style={[styles.allocationTrack, { backgroundColor: theme.inputBackground }]}>
+                      <View
+                        style={[
+                          styles.allocationFill,
+                          { width: `${item.percent}%`, backgroundColor: item.color },
+                        ]}
+                      />
+                    </View>
+                  </View>
+                ))}
+              </View>
             </View>
           ) : (
             <View style={styles.emptyChartBox}>
               <Ionicons name="pie-chart-outline" size={36} color={theme.textTertiary} />
               <Text style={[styles.emptyChartText, { color: theme.textSecondary }]}>
-                No expenses logged for this period yet.
+                No expenses recorded for {selectedMonthLabel}.
               </Text>
             </View>
           )}
         </View>
 
-        {/* Quick Action Banner */}
+        {/* Smart Contextual Insight Banner */}
+        <View
+          style={[
+            styles.insightCard,
+            {
+              backgroundColor:
+                smartInsight.type === 'danger'
+                  ? theme.dangerBg
+                  : smartInsight.type === 'warning'
+                  ? theme.warningBg
+                  : theme.primaryLight,
+              borderColor:
+                smartInsight.type === 'danger'
+                  ? theme.danger + '30'
+                  : smartInsight.type === 'warning'
+                  ? theme.warning + '30'
+                  : theme.primary + '30',
+            },
+          ]}
+        >
+          <View style={styles.insightIconCircle}>
+            <Ionicons
+              name={smartInsight.icon as any}
+              size={20}
+              color={
+                smartInsight.type === 'danger'
+                  ? theme.danger
+                  : smartInsight.type === 'warning'
+                  ? theme.warning
+                  : theme.primary
+              }
+            />
+          </View>
+          <View style={styles.insightTextGroup}>
+            <Text
+              style={[
+                styles.insightTitle,
+                {
+                  color:
+                    smartInsight.type === 'danger'
+                      ? theme.danger
+                      : smartInsight.type === 'warning'
+                      ? theme.warning
+                      : theme.primary,
+                },
+              ]}
+            >
+              {smartInsight.title}
+            </Text>
+            <Text style={[styles.insightMessage, { color: theme.text }]}>
+              {smartInsight.message}
+            </Text>
+          </View>
+        </View>
+
+        {/* Quick Action Row */}
         <View style={styles.actionRow}>
           <TouchableOpacity
             style={[styles.primaryActionBtn, { backgroundColor: theme.primary }]}
@@ -543,12 +849,16 @@ export default function DashboardScreen({ navigation }: any) {
           <Ionicons name="chevron-forward" size={18} color={theme.textTertiary} />
         </TouchableOpacity>
 
-        {/* Recent Transactions Section */}
+        {/* Recent Transactions Section for Selected Month */}
         <View style={styles.sectionHeader}>
-          <Text style={[styles.sectionTitle, { color: theme.text }]}>Recent Activity</Text>
-          {expenses.length > 0 && (
+          <Text style={[styles.sectionTitle, { color: theme.text }]}>
+            {selectedMonthLabel} Activity
+          </Text>
+          {filteredExpenses.length > 0 && (
             <TouchableOpacity onPress={() => navigation?.navigate('Expenses')}>
-              <Text style={[styles.viewAllText, { color: theme.primary }]}>View All ({expenses.length})</Text>
+              <Text style={[styles.viewAllText, { color: theme.primary }]}>
+                View All ({filteredExpenses.length})
+              </Text>
             </TouchableOpacity>
           )}
         </View>
@@ -604,14 +914,251 @@ export default function DashboardScreen({ navigation }: any) {
           <View style={[styles.emptyRecentCard, { backgroundColor: theme.card, borderColor: theme.border }]}>
             <Ionicons name="receipt-outline" size={32} color={theme.textTertiary} />
             <Text style={[styles.emptyRecentText, { color: theme.textSecondary }]}>
-              No transactions recorded yet.
+              No expenses recorded in {selectedMonthLabel}.
             </Text>
           </View>
         )}
       </ScrollView>
 
+      {/* Profile & Settings Bottom Sheet Modal */}
+      <Modal
+        visible={profileModalVisible}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={() => setProfileModalVisible(false)}
+      >
+        <TouchableOpacity
+          style={styles.modalOverlay}
+          activeOpacity={1}
+          onPress={() => setProfileModalVisible(false)}
+        >
+          <View
+            style={[styles.modalContent, { backgroundColor: theme.card, borderColor: theme.border }]}
+            onStartShouldSetResponder={() => true}
+          >
+            <View style={styles.modalHeader}>
+              <Text style={[styles.modalTitle, { color: theme.text }]}>Profile & Settings</Text>
+              <TouchableOpacity
+                onPress={() => setProfileModalVisible(false)}
+                style={[styles.closeModalBtn, { backgroundColor: theme.inputBackground }]}
+              >
+                <Ionicons name="close" size={20} color={theme.text} />
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView showsVerticalScrollIndicator={false}>
+              {/* User Identity Card */}
+              <View style={[styles.userProfileCard, { backgroundColor: theme.inputBackground }]}>
+                <View style={[styles.largeAvatar, { backgroundColor: theme.primary }]}>
+                  <Text style={styles.largeAvatarText}>{initial}</Text>
+                </View>
+                <View style={styles.userProfileInfo}>
+                  <Text style={[styles.userProfileName, { color: theme.text }]}>{displayName}</Text>
+                  <Text style={[styles.userProfileEmail, { color: theme.textSecondary }]}>
+                    {user?.email || 'charity@example.com'}
+                  </Text>
+                </View>
+              </View>
+
+              {/* Theme Selector */}
+              <Text style={[styles.sheetSectionTitle, { color: theme.textSecondary }]}>Appearance</Text>
+              <View style={[styles.themePillsContainer, { backgroundColor: theme.inputBackground }]}>
+                {(['system', 'light', 'dark'] as ThemeMode[]).map((mode) => {
+                  const isSelected = themeMode === mode;
+                  const iconName =
+                    mode === 'system' ? 'phone-portrait-outline' : mode === 'light' ? 'sunny-outline' : 'moon-outline';
+                  return (
+                    <TouchableOpacity
+                      key={mode}
+                      style={[
+                        styles.themePill,
+                        isSelected && [styles.themePillActive, { backgroundColor: theme.card }],
+                      ]}
+                      onPress={() => setThemeMode(mode)}
+                    >
+                      <Ionicons
+                        name={iconName as any}
+                        size={15}
+                        color={isSelected ? theme.primary : theme.textSecondary}
+                      />
+                      <Text
+                        style={[
+                          styles.themePillText,
+                          {
+                            color: isSelected ? theme.primary : theme.textSecondary,
+                            fontWeight: isSelected ? '700' : '500',
+                          },
+                        ]}
+                      >
+                        {mode.charAt(0).toUpperCase() + mode.slice(1)}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+
+              {/* Financial Snapshot */}
+              <Text style={[styles.sheetSectionTitle, { color: theme.textSecondary }]}>Financial Snapshot</Text>
+              <View style={[styles.statsGrid, { backgroundColor: theme.inputBackground }]}>
+                <View style={styles.statBox}>
+                  <Text style={[styles.statBoxNumber, { color: theme.text }]}>{expenses.length}</Text>
+                  <Text style={[styles.statBoxLabel, { color: theme.textSecondary }]}>Transactions</Text>
+                </View>
+                <View style={[styles.statDivider, { backgroundColor: theme.border }]} />
+                <View style={styles.statBox}>
+                  <Text style={[styles.statBoxNumber, { color: theme.primary }]}>
+                    {formatCurrency(lifetimeTotal)}
+                  </Text>
+                  <Text style={[styles.statBoxLabel, { color: theme.textSecondary }]}>Lifetime Spend</Text>
+                </View>
+                <View style={[styles.statDivider, { backgroundColor: theme.border }]} />
+                <View style={styles.statBox}>
+                  <Text style={[styles.statBoxNumber, { color: theme.text }]}>
+                    {Object.values(budgets).filter((b) => b > 0).length}
+                  </Text>
+                  <Text style={[styles.statBoxLabel, { color: theme.textSecondary }]}>Budgets Set</Text>
+                </View>
+              </View>
+
+              {/* Data Actions */}
+              <Text style={[styles.sheetSectionTitle, { color: theme.textSecondary }]}>Data & Sync</Text>
+              <TouchableOpacity
+                style={[styles.sheetActionRow, { backgroundColor: theme.inputBackground }]}
+                onPress={handleExportCSV}
+              >
+                <View style={styles.sheetActionLeft}>
+                  <Ionicons name="document-text-outline" size={20} color={theme.primary} />
+                  <Text style={[styles.sheetActionText, { color: theme.text }]}>Export All to CSV</Text>
+                </View>
+                <Ionicons name="download-outline" size={18} color={theme.textSecondary} />
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.sheetActionRow, { backgroundColor: theme.inputBackground, marginTop: 8 }]}
+                onPress={() => {
+                  setProfileModalVisible(false);
+                  syncMpesaSms(false);
+                }}
+              >
+                <View style={styles.sheetActionLeft}>
+                  <Ionicons name="sync-outline" size={20} color={theme.success} />
+                  <Text style={[styles.sheetActionText, { color: theme.text }]}>Scan M-Pesa SMS Inbox</Text>
+                </View>
+                <Ionicons name="chevron-forward" size={18} color={theme.textSecondary} />
+              </TouchableOpacity>
+
+              {/* Logout Button */}
+              <TouchableOpacity
+                style={[styles.logoutSheetBtn, { backgroundColor: theme.dangerBg }]}
+                onPress={() => {
+                  setProfileModalVisible(false);
+                  logout();
+                }}
+              >
+                <Ionicons name="log-out-outline" size={18} color={theme.danger} />
+                <Text style={[styles.logoutSheetText, { color: theme.danger }]}>Sign Out</Text>
+              </TouchableOpacity>
+            </ScrollView>
+          </View>
+        </TouchableOpacity>
+      </Modal>
+
+      {/* Select Month Modal */}
+      <Modal
+        visible={monthPickerVisible}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={() => setMonthPickerVisible(false)}
+      >
+        <TouchableOpacity
+          style={styles.modalOverlay}
+          activeOpacity={1}
+          onPress={() => setMonthPickerVisible(false)}
+        >
+          <View
+            style={[styles.modalContent, { backgroundColor: theme.card, borderColor: theme.border }]}
+            onStartShouldSetResponder={() => true}
+          >
+            <View style={styles.modalHeader}>
+              <View style={styles.monthModalTitleRow}>
+                <Ionicons name="calendar" size={20} color={theme.primary} />
+                <Text style={[styles.modalTitle, { color: theme.text }]}>Select Month</Text>
+              </View>
+              <TouchableOpacity
+                onPress={() => setMonthPickerVisible(false)}
+                style={[styles.closeModalBtn, { backgroundColor: theme.inputBackground }]}
+              >
+                <Ionicons name="close" size={20} color={theme.text} />
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView showsVerticalScrollIndicator={false} style={styles.monthListScroll}>
+              {availableMonths.map((m) => {
+                const isSelected =
+                  m.month === selectedDate.month && m.year === selectedDate.year;
+                const isCurrent =
+                  m.month === now.getMonth() && m.year === now.getFullYear();
+
+                return (
+                  <TouchableOpacity
+                    key={`${m.year}-${m.month}`}
+                    style={[
+                      styles.monthOptionItem,
+                      {
+                        backgroundColor: isSelected ? theme.primaryLight : theme.inputBackground,
+                        borderColor: isSelected ? theme.primary : theme.border,
+                      },
+                    ]}
+                    onPress={() => {
+                      setSelectedDate({ month: m.month, year: m.year });
+                      setMonthPickerVisible(false);
+                    }}
+                  >
+                    <View style={styles.monthOptionLeft}>
+                      <Text
+                        style={[
+                          styles.monthOptionTitle,
+                          {
+                            color: isSelected ? theme.primary : theme.text,
+                            fontWeight: isSelected ? '700' : '600',
+                          },
+                        ]}
+                      >
+                        {MONTH_NAMES[m.month]} {m.year}
+                      </Text>
+                      <Text style={[styles.monthOptionSubtitle, { color: theme.textSecondary }]}>
+                        {m.count} {m.count === 1 ? 'transaction' : 'transactions'} •{' '}
+                        {formatCurrency(m.total)}
+                      </Text>
+                    </View>
+
+                    <View style={styles.monthOptionRight}>
+                      {isCurrent && (
+                        <View style={[styles.currentBadge, { backgroundColor: theme.successBg }]}>
+                          <Text style={[styles.currentBadgeText, { color: theme.success }]}>
+                            Current
+                          </Text>
+                        </View>
+                      )}
+                      {isSelected && (
+                        <Ionicons name="checkmark-circle" size={22} color={theme.primary} />
+                      )}
+                    </View>
+                  </TouchableOpacity>
+                );
+              })}
+            </ScrollView>
+          </View>
+        </TouchableOpacity>
+      </Modal>
+
       {/* Modern Add Expense Modal */}
-      <Modal visible={modalVisible} animationType="slide" transparent={true} onRequestClose={() => setModalVisible(false)}>
+      <Modal
+        visible={modalVisible}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={() => setModalVisible(false)}
+      >
         <KeyboardAvoidingView
           behavior={Platform.OS === 'ios' ? 'padding' : undefined}
           style={styles.modalOverlay}
@@ -653,7 +1200,10 @@ export default function DashboardScreen({ navigation }: any) {
                       <Text
                         style={[
                           styles.modalCategoryChipText,
-                          { color: isSelected ? '#FFFFFF' : theme.text, fontWeight: isSelected ? '700' : '500' },
+                          {
+                            color: isSelected ? '#FFFFFF' : theme.text,
+                            fontWeight: isSelected ? '700' : '500',
+                          },
                         ]}
                       >
                         {cat.name}
@@ -665,7 +1215,12 @@ export default function DashboardScreen({ navigation }: any) {
 
               {/* Amount Input */}
               <Text style={[styles.inputLabel, { color: theme.textSecondary }]}>Amount</Text>
-              <View style={[styles.amountInputContainer, { backgroundColor: theme.inputBackground, borderColor: theme.border }]}>
+              <View
+                style={[
+                  styles.amountInputContainer,
+                  { backgroundColor: theme.inputBackground, borderColor: theme.border },
+                ]}
+              >
                 <Text style={[styles.currencyPrefix, { color: theme.primary }]}>KES</Text>
                 <TextInput
                   placeholder="0.00"
@@ -683,7 +1238,14 @@ export default function DashboardScreen({ navigation }: any) {
               <TextInput
                 placeholder="What was this expense for?"
                 placeholderTextColor={theme.textTertiary}
-                style={[styles.textInput, { backgroundColor: theme.inputBackground, color: theme.text, borderColor: theme.border }]}
+                style={[
+                  styles.textInput,
+                  {
+                    backgroundColor: theme.inputBackground,
+                    color: theme.text,
+                    borderColor: theme.border,
+                  },
+                ]}
                 value={description}
                 onChangeText={setDescription}
               />
@@ -692,7 +1254,10 @@ export default function DashboardScreen({ navigation }: any) {
               <Text style={[styles.inputLabel, { color: theme.textSecondary }]}>Date</Text>
               <TouchableOpacity
                 onPress={() => setShowDatePicker(true)}
-                style={[styles.dateSelectorBtn, { backgroundColor: theme.inputBackground, borderColor: theme.border }]}
+                style={[
+                  styles.dateSelectorBtn,
+                  { backgroundColor: theme.inputBackground, borderColor: theme.border },
+                ]}
               >
                 <Ionicons name="calendar-outline" size={18} color={theme.textSecondary} />
                 <Text style={[styles.dateSelectorText, { color: theme.text }]}>
@@ -710,9 +1275,9 @@ export default function DashboardScreen({ navigation }: any) {
                   value={date}
                   mode="date"
                   display="default"
-                  onChange={(event, selectedDate) => {
+                  onChange={(event, selectedDateVal) => {
                     setShowDatePicker(false);
-                    if (selectedDate) setDate(selectedDate);
+                    if (selectedDateVal) setDate(selectedDateVal);
                   }}
                 />
               )}
@@ -750,21 +1315,35 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 12,
   },
-  brandIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: 12,
+  avatarCircle: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
     justifyContent: 'center',
     alignItems: 'center',
+    shadowColor: '#4F46E5',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  avatarInitial: {
+    color: '#FFFFFF',
+    fontSize: 18,
+    fontWeight: '800',
   },
   headerSubtitle: {
     fontSize: 12,
     fontWeight: '500',
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
+    letterSpacing: 0.3,
+  },
+  headerNameRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
   },
   title: {
-    fontSize: 20,
+    fontSize: 19,
     fontWeight: '800',
   },
   headerRight: {
@@ -785,8 +1364,8 @@ const styles = StyleSheet.create({
   },
   heroCard: {
     borderRadius: 20,
-    padding: 20,
-    marginBottom: 16,
+    padding: 18,
+    marginBottom: 14,
     borderWidth: 1,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 4 },
@@ -794,11 +1373,40 @@ const styles = StyleSheet.create({
     shadowRadius: 12,
     elevation: 3,
   },
+  monthNavigatorRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    borderRadius: 12,
+    paddingHorizontal: 6,
+    paddingVertical: 5,
+    marginBottom: 16,
+  },
+  monthNavBtn: {
+    width: 34,
+    height: 34,
+    borderRadius: 8,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  monthSelectorPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 8,
+  },
+  monthSelectorText: {
+    fontSize: 13,
+    fontWeight: '700',
+  },
   heroHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'flex-start',
     marginBottom: 16,
+    paddingHorizontal: 4,
   },
   heroSubtitle: {
     fontSize: 13,
@@ -812,26 +1420,17 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     letterSpacing: -0.5,
   },
-  timeframePill: {
+  todayJumpBadge: {
     flexDirection: 'row',
-    borderRadius: 10,
-    padding: 3,
-  },
-  timeframeOption: {
-    paddingVertical: 5,
+    alignItems: 'center',
+    gap: 4,
     paddingHorizontal: 10,
-    borderRadius: 8,
+    paddingVertical: 6,
+    borderRadius: 10,
   },
-  timeframeOptionActive: {
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 2,
-    elevation: 1,
-  },
-  timeframeText: {
+  todayJumpText: {
     fontSize: 12,
-    fontWeight: '600',
+    fontWeight: '700',
   },
   metricsRow: {
     flexDirection: 'row',
@@ -864,8 +1463,48 @@ const styles = StyleSheet.create({
   chartTitle: {
     fontSize: 12,
     fontWeight: '600',
-    marginBottom: 8,
+    marginBottom: 6,
     alignSelf: 'flex-start',
+  },
+  allocationBarsContainer: {
+    width: '100%',
+    marginTop: 8,
+    gap: 8,
+  },
+  allocationRow: {
+    width: '100%',
+  },
+  allocationHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 4,
+  },
+  allocationTitleGroup: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  allocationDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+  },
+  allocationName: {
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  allocationAmount: {
+    fontSize: 11,
+  },
+  allocationTrack: {
+    height: 6,
+    borderRadius: 3,
+    overflow: 'hidden',
+  },
+  allocationFill: {
+    height: '100%',
+    borderRadius: 3,
   },
   emptyChartBox: {
     alignItems: 'center',
@@ -875,10 +1514,38 @@ const styles = StyleSheet.create({
     fontSize: 13,
     marginTop: 8,
   },
+  insightCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderRadius: 16,
+    borderWidth: 1,
+    padding: 14,
+    marginBottom: 14,
+    gap: 12,
+  },
+  insightIconCircle: {
+    width: 38,
+    height: 38,
+    borderRadius: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  insightTextGroup: {
+    flex: 1,
+  },
+  insightTitle: {
+    fontSize: 13,
+    fontWeight: '700',
+    marginBottom: 2,
+  },
+  insightMessage: {
+    fontSize: 12,
+    lineHeight: 17,
+  },
   actionRow: {
     flexDirection: 'row',
     gap: 12,
-    marginBottom: 16,
+    marginBottom: 14,
   },
   primaryActionBtn: {
     flex: 1.4,
@@ -919,7 +1586,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     borderRadius: 16,
     padding: 14,
-    marginBottom: 20,
+    marginBottom: 18,
     borderWidth: 1,
   },
   syncStatusLeft: {
@@ -1056,13 +1723,18 @@ const styles = StyleSheet.create({
     borderTopRightRadius: 24,
     borderWidth: 1,
     padding: 22,
-    maxHeight: '88%',
+    maxHeight: '90%',
   },
   modalHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     marginBottom: 16,
+  },
+  monthModalTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
   },
   modalTitle: {
     fontSize: 18,
@@ -1074,6 +1746,162 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  monthListScroll: {
+    maxHeight: 320,
+    marginBottom: 12,
+  },
+  monthOptionItem: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 14,
+    borderRadius: 14,
+    borderWidth: 1,
+    marginBottom: 10,
+  },
+  monthOptionLeft: {
+    flex: 1,
+  },
+  monthOptionTitle: {
+    fontSize: 15,
+    marginBottom: 3,
+  },
+  monthOptionSubtitle: {
+    fontSize: 12,
+  },
+  monthOptionRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  currentBadge: {
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 6,
+  },
+  currentBadgeText: {
+    fontSize: 10,
+    fontWeight: '700',
+  },
+  userProfileCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 16,
+    borderRadius: 16,
+    marginBottom: 16,
+    gap: 14,
+  },
+  largeAvatar: {
+    width: 54,
+    height: 54,
+    borderRadius: 27,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  largeAvatarText: {
+    color: '#FFFFFF',
+    fontSize: 22,
+    fontWeight: '800',
+  },
+  userProfileInfo: {
+    flex: 1,
+  },
+  userProfileName: {
+    fontSize: 18,
+    fontWeight: '800',
+    marginBottom: 2,
+  },
+  userProfileEmail: {
+    fontSize: 13,
+  },
+  sheetSectionTitle: {
+    fontSize: 12,
+    fontWeight: '600',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    marginBottom: 8,
+    marginTop: 6,
+  },
+  themePillsContainer: {
+    flexDirection: 'row',
+    borderRadius: 12,
+    padding: 4,
+    marginBottom: 16,
+  },
+  themePill: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingVertical: 8,
+    borderRadius: 10,
+  },
+  themePillActive: {
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+    elevation: 2,
+  },
+  themePillText: {
+    fontSize: 12,
+  },
+  statsGrid: {
+    flexDirection: 'row',
+    borderRadius: 14,
+    paddingVertical: 14,
+    paddingHorizontal: 6,
+    marginBottom: 16,
+    alignItems: 'center',
+  },
+  statBox: {
+    flex: 1,
+    alignItems: 'center',
+  },
+  statBoxNumber: {
+    fontSize: 15,
+    fontWeight: '800',
+    marginBottom: 3,
+  },
+  statBoxLabel: {
+    fontSize: 11,
+    fontWeight: '500',
+  },
+  statDivider: {
+    width: 1,
+    height: 28,
+  },
+  sheetActionRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 14,
+    borderRadius: 14,
+  },
+  sheetActionLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  sheetActionText: {
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  logoutSheetBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    paddingVertical: 14,
+    borderRadius: 14,
+    marginTop: 20,
+    marginBottom: 12,
+  },
+  logoutSheetText: {
+    fontSize: 15,
+    fontWeight: '700',
   },
   inputLabel: {
     fontSize: 12,

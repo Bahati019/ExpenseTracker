@@ -14,11 +14,17 @@ import { useAuth } from '../context/AuthContext';
 import { useThemeColors } from '../theme';
 
 export default function LoginScreen({ navigation }: any) {
-  const { login } = useAuth();
+  const { login, user } = useAuth();
   const theme = useThemeColors();
-  const [email, setEmail] = useState('');
+  const [email, setEmail] = useState(user?.email || '');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
+
+  const handleLogin = async () => {
+    await login({
+      email: email.trim(),
+    });
+  };
 
   return (
     <KeyboardAvoidingView
@@ -39,9 +45,11 @@ export default function LoginScreen({ navigation }: any) {
 
         {/* Login Card */}
         <View style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border }]}>
-          <Text style={[styles.cardTitle, { color: theme.text }]}>Welcome Back</Text>
+          <Text style={[styles.cardTitle, { color: theme.text }]}>
+            {user?.name ? `Welcome Back, ${user.name}!` : 'Welcome Back'}
+          </Text>
           <Text style={[styles.cardSubtitle, { color: theme.textSecondary }]}>
-            Sign in to track your spending and budgets
+            Sign in to track your expenses and monthly budgets
           </Text>
 
           {/* Email Input */}
@@ -50,7 +58,7 @@ export default function LoginScreen({ navigation }: any) {
             <Ionicons name="mail-outline" size={18} color={theme.textSecondary} style={styles.inputIcon} />
             <TextInput
               style={[styles.input, { color: theme.text }]}
-              placeholder="name@example.com"
+              placeholder="e.g. charity@example.com"
               placeholderTextColor={theme.textTertiary}
               value={email}
               onChangeText={setEmail}
@@ -83,7 +91,7 @@ export default function LoginScreen({ navigation }: any) {
           {/* Sign In Button */}
           <TouchableOpacity
             style={[styles.primaryButton, { backgroundColor: theme.primary }]}
-            onPress={login}
+            onPress={handleLogin}
             activeOpacity={0.8}
           >
             <Text style={styles.primaryButtonText}>Sign In</Text>

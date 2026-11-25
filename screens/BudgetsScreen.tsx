@@ -68,6 +68,12 @@ export default function BudgetsScreen() {
 
   const remainingBudget = totalBudgeted - totalSpentAcrossBudgeted;
 
+  // Safe daily spend analytics
+  const now = new Date();
+  const totalDaysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
+  const daysRemaining = Math.max(1, totalDaysInMonth - now.getDate() + 1);
+  const safeDailySpend = remainingBudget > 0 ? remainingBudget / daysRemaining : 0;
+
   const handleSaveBudget = () => {
     if (selectedCategory) {
       const parsed = parseFloat(budgetInput);
@@ -208,6 +214,33 @@ export default function BudgetsScreen() {
                     </Text>
                   </View>
                 </View>
+
+                {/* Safe Daily Allowance Analytics Banner */}
+                {remainingBudget > 0 ? (
+                  <View style={[styles.dailyAllowanceBanner, { backgroundColor: theme.primaryLight }]}>
+                    <Ionicons name="shield-checkmark" size={18} color={theme.primary} />
+                    <View style={styles.dailyAllowanceTextGroup}>
+                      <Text style={[styles.dailyAllowanceTitle, { color: theme.primary }]}>
+                        Safe Daily Allowance: {formatCurrency(safeDailySpend)}/day
+                      </Text>
+                      <Text style={[styles.dailyAllowanceSubtitle, { color: theme.textSecondary }]}>
+                        Remaining for the next {daysRemaining} {daysRemaining === 1 ? 'day' : 'days'} to stay on track.
+                      </Text>
+                    </View>
+                  </View>
+                ) : (
+                  <View style={[styles.dailyAllowanceBanner, { backgroundColor: theme.dangerBg }]}>
+                    <Ionicons name="alert-circle" size={18} color={theme.danger} />
+                    <View style={styles.dailyAllowanceTextGroup}>
+                      <Text style={[styles.dailyAllowanceTitle, { color: theme.danger }]}>
+                        Monthly Target Exceeded
+                      </Text>
+                      <Text style={[styles.dailyAllowanceSubtitle, { color: theme.text }]}>
+                        Total spending is {formatCurrency(Math.abs(remainingBudget))} over your set limit.
+                      </Text>
+                    </View>
+                  </View>
+                )}
               </>
             ) : (
               <Text style={[styles.noBudgetHelperText, { color: theme.textSecondary }]}>
@@ -453,7 +486,7 @@ const styles = StyleSheet.create({
   healthCard: {
     borderRadius: 20,
     padding: 20,
-    marginBottom: 20,
+    marginBottom: 16,
     borderWidth: 1,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 4 },
@@ -521,6 +554,25 @@ const styles = StyleSheet.create({
   healthMetricValue: {
     fontSize: 14,
     fontWeight: '700',
+  },
+  dailyAllowanceBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    padding: 12,
+    borderRadius: 12,
+    marginTop: 14,
+  },
+  dailyAllowanceTextGroup: {
+    flex: 1,
+  },
+  dailyAllowanceTitle: {
+    fontSize: 13,
+    fontWeight: '700',
+    marginBottom: 2,
+  },
+  dailyAllowanceSubtitle: {
+    fontSize: 11,
   },
   noBudgetHelperText: {
     fontSize: 13,

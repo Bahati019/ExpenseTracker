@@ -19,23 +19,29 @@ import { useThemeColors } from '../theme';
 type Props = NativeStackScreenProps<RootStackParamList, 'Register'>;
 
 export default function RegisterScreen({ navigation }: Props) {
-  const { login } = useAuth();
+  const { register } = useAuth();
   const theme = useThemeColors();
+  const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
 
-  const handleRegister = () => {
+  const handleRegister = async () => {
+    if (!name.trim()) {
+      Alert.alert('Required', 'Please enter your name.');
+      return;
+    }
     if (!email.trim() || !password) {
-      Alert.alert('Required', 'Please fill in all fields.');
+      Alert.alert('Required', 'Please fill in all email and password fields.');
       return;
     }
     if (password !== confirmPassword) {
       Alert.alert('Mismatch', 'Passwords do not match.');
       return;
     }
-    login();
+
+    await register(name.trim(), email.trim());
   };
 
   return (
@@ -49,18 +55,32 @@ export default function RegisterScreen({ navigation }: Props) {
           <View style={[styles.brandIconCircle, { backgroundColor: theme.primaryLight }]}>
             <Ionicons name="sparkles" size={32} color={theme.primary} />
           </View>
-          <Text style={[styles.brandTitle, { color: theme.text }]}>Get Started</Text>
+          <Text style={[styles.brandTitle, { color: theme.text }]}>Create Account</Text>
           <Text style={[styles.brandTagline, { color: theme.textSecondary }]}>
-            Create your account to start managing expenses
+            Track your M-Pesa receipts & monthly budgets
           </Text>
         </View>
 
         {/* Register Card */}
         <View style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border }]}>
-          <Text style={[styles.cardTitle, { color: theme.text }]}>Create Account</Text>
+          <Text style={[styles.cardTitle, { color: theme.text }]}>Join Expense Tracker</Text>
           <Text style={[styles.cardSubtitle, { color: theme.textSecondary }]}>
-            Start tracking M-Pesa receipts effortlessly
+            Enter your details below to get started
           </Text>
+
+          {/* Full Name */}
+          <Text style={[styles.inputLabel, { color: theme.textSecondary }]}>Your Name</Text>
+          <View style={[styles.inputContainer, { backgroundColor: theme.inputBackground, borderColor: theme.border }]}>
+            <Ionicons name="person-outline" size={18} color={theme.textSecondary} style={styles.inputIcon} />
+            <TextInput
+              style={[styles.input, { color: theme.text }]}
+              placeholder="e.g. Charity"
+              placeholderTextColor={theme.textTertiary}
+              value={name}
+              onChangeText={setName}
+              autoCapitalize="words"
+            />
+          </View>
 
           {/* Email */}
           <Text style={[styles.inputLabel, { color: theme.textSecondary }]}>Email Address</Text>
@@ -150,18 +170,18 @@ const styles = StyleSheet.create({
   },
   brandContainer: {
     alignItems: 'center',
-    marginBottom: 28,
+    marginBottom: 24,
   },
   brandIconCircle: {
-    width: 68,
-    height: 68,
+    width: 64,
+    height: 64,
     borderRadius: 20,
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 14,
+    marginBottom: 12,
   },
   brandTitle: {
-    fontSize: 26,
+    fontSize: 24,
     fontWeight: '800',
     letterSpacing: -0.5,
     marginBottom: 4,
@@ -171,7 +191,7 @@ const styles = StyleSheet.create({
   },
   card: {
     borderRadius: 22,
-    padding: 24,
+    padding: 22,
     borderWidth: 1,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 4 },
@@ -180,13 +200,13 @@ const styles = StyleSheet.create({
     elevation: 3,
   },
   cardTitle: {
-    fontSize: 20,
+    fontSize: 19,
     fontWeight: '800',
     marginBottom: 4,
   },
   cardSubtitle: {
     fontSize: 13,
-    marginBottom: 20,
+    marginBottom: 16,
   },
   inputLabel: {
     fontSize: 12,
@@ -202,8 +222,8 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     borderWidth: 1,
     paddingHorizontal: 12,
-    height: 50,
-    marginBottom: 14,
+    height: 48,
+    marginBottom: 12,
   },
   inputIcon: {
     marginRight: 8,
@@ -222,9 +242,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 8,
     borderRadius: 14,
-    paddingVertical: 15,
-    marginTop: 10,
-    marginBottom: 20,
+    paddingVertical: 14,
+    marginTop: 8,
+    marginBottom: 16,
     shadowColor: '#4F46E5',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.25,

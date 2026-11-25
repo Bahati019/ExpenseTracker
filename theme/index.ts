@@ -23,7 +23,7 @@ export interface ThemeColors {
   shadow: string;
 }
 
-const light: ThemeColors = {
+export const light: ThemeColors = {
   background: '#F8FAFC',
   card: '#FFFFFF',
   cardSecondary: '#F1F5F9',
@@ -46,7 +46,7 @@ const light: ThemeColors = {
   shadow: '#0F172A',
 };
 
-const dark: ThemeColors = {
+export const dark: ThemeColors = {
   background: '#0B0F19',
   card: '#161F30',
   cardSecondary: '#1E293B',
@@ -67,11 +67,6 @@ const dark: ThemeColors = {
   danger: '#F87171',
   dangerBg: '#451A1A',
   shadow: '#000000',
-};
-
-export const useThemeColors = (): ThemeColors => {
-  const scheme = useColorScheme();
-  return scheme === 'dark' ? dark : light;
 };
 
 export interface CategoryMeta {
@@ -109,7 +104,6 @@ export const getCategoryMeta = (name?: string): CategoryMeta => {
 
 /**
  * Robust currency formatter for KES (e.g. KES 12,500.00)
- * Works consistently across all JS engines (Hermes, JSC, V8)
  */
 export const formatCurrency = (amount: number = 0): string => {
   const parts = Math.abs(amount).toFixed(2).split('.');
@@ -129,4 +123,20 @@ export const formatCurrencyCompact = (amount: number = 0): string => {
     return `KES ${(amount / 1_000).toFixed(1)}k`;
   }
   return formatCurrency(amount);
+};
+
+/**
+ * Standard theme hook using ThemeContext if available, falling back to useColorScheme()
+ */
+export const useThemeColors = (): ThemeColors => {
+  try {
+    // Dynamic import avoidance; will delegate to useTheme from context/ThemeContext
+    const { useTheme } = require('../context/ThemeContext');
+    const { theme } = useTheme();
+    if (theme) return theme;
+  } catch {
+    // fallback
+  }
+  const scheme = useColorScheme();
+  return scheme === 'dark' ? dark : light;
 };
